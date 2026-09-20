@@ -1,0 +1,989 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>RISC201 Processor Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+:root{
+  --paper:#F1F4F4;
+  --surface:#FFFFFF;
+  --surface-2:#E9EEEE;
+  --ink:#101E1E;
+  --ink-2:#516464;
+  --ink-3:#7C8E8E;
+  --rule:#D0DADA;
+  --rule-strong:#AFBFBF;
+  --petrol:#0D5A60;
+  --petrol-ink:#0A484D;
+  --petrol-soft:#DCECEC;
+  --amber:#A66A06;
+  --amber-ink:#8A5804;
+  --amber-soft:#F8EED9;
+  --alert:#9B2C2C;
+  --alert-soft:#F7E3E3;
+
+  --st-if:#DCE9EF;
+  --st-of:#D6E7E4;
+  --st-ex:#E9E4D3;
+  --st-ma:#E6DEE8;
+  --st-rw:#DEE6DA;
+  --st-stall:#F2DFDF;
+  --st-flush:#E6E9E9;
+  --st-ink:#1B2C2C;
+  --st-flush-ink:#94A4A4;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0C1413;
+    --surface:#141E1D;
+    --surface-2:#1B2726;
+    --ink:#E2EAE9;
+    --ink-2:#9AACAB;
+    --ink-3:#778988;
+    --rule:#283635;
+    --rule-strong:#3B4D4C;
+    --petrol:#5FC3C6;
+    --petrol-ink:#8AD8DA;
+    --petrol-soft:#12302F;
+    --amber:#E2AA51;
+    --amber-ink:#EFC583;
+    --amber-soft:#2F2412;
+    --alert:#E38080;
+    --alert-soft:#341A1A;
+
+    --st-if:#1B2F3A;
+    --st-of:#17332F;
+    --st-ex:#332D19;
+    --st-ma:#2C2436;
+    --st-rw:#1E2F1F;
+    --st-stall:#3A1F1F;
+    --st-flush:#1D2726;
+    --st-ink:#D6E3E2;
+    --st-flush-ink:#5E6E6D;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0C1413;
+  --surface:#141E1D;
+  --surface-2:#1B2726;
+  --ink:#E2EAE9;
+  --ink-2:#9AACAB;
+  --ink-3:#778988;
+  --rule:#283635;
+  --rule-strong:#3B4D4C;
+  --petrol:#5FC3C6;
+  --petrol-ink:#8AD8DA;
+  --petrol-soft:#12302F;
+  --amber:#E2AA51;
+  --amber-ink:#EFC583;
+  --amber-soft:#2F2412;
+  --alert:#E38080;
+  --alert-soft:#341A1A;
+
+  --st-if:#1B2F3A;
+  --st-of:#17332F;
+  --st-ex:#332D19;
+  --st-ma:#2C2436;
+  --st-rw:#1E2F1F;
+  --st-stall:#3A1F1F;
+  --st-flush:#1D2726;
+  --st-ink:#D6E3E2;
+  --st-flush-ink:#5E6E6D;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Source Serif 4",Georgia,"Times New Roman",serif;
+  font-size:17px;
+  line-height:1.62;
+  padding-inline:20px;
+  padding-block:0;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:0}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+.mast{padding-block:64px 40px;border-bottom:2px solid var(--ink);}
+.mast .eyebrow{
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--petrol);margin:0 0 20px;font-weight:700;
+}
+.mast h1{
+  font-family:"Zilla Slab",Georgia,serif;font-weight:700;
+  font-size:clamp(38px,7vw,64px);line-height:1.02;letter-spacing:-.02em;
+  margin:0 0 20px;text-wrap:balance;
+}
+.mast .standfirst{font-size:20px;line-height:1.55;color:var(--ink-2);margin:0;max-width:60ch}
+.mast .meta{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;
+  color:var(--ink-3);margin:28px 0 0;display:flex;flex-wrap:wrap;gap:8px 22px;
+}
+
+/* ---------- sections ---------- */
+section{padding-block:52px;border-bottom:1px solid var(--rule)}
+section:last-of-type{border-bottom:0}
+.shead{display:flex;align-items:baseline;gap:16px;margin:0 0 8px;flex-wrap:wrap}
+.snum{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;font-weight:700;
+  letter-spacing:.1em;color:var(--petrol);padding:3px 9px;border:1px solid var(--petrol);
+  border-radius:2px;white-space:nowrap;
+}
+h2{
+  font-family:"Zilla Slab",Georgia,serif;font-weight:600;
+  font-size:clamp(27px,4.4vw,38px);line-height:1.12;letter-spacing:-.015em;
+  margin:0;text-wrap:balance;
+}
+h3{
+  font-family:"Zilla Slab",Georgia,serif;font-weight:600;font-size:22px;
+  line-height:1.25;margin:40px 0 10px;text-wrap:balance;
+}
+h4{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:700;
+  font-size:12px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-2);
+  margin:30px 0 8px;
+}
+p{margin:0 0 15px;max-width:68ch}
+.lede{font-size:18.5px;color:var(--ink-2);margin-bottom:22px;max-width:64ch}
+ul,ol{margin:0 0 16px;padding-left:22px;max-width:68ch}
+li{margin-bottom:7px}
+li::marker{color:var(--ink-3)}
+strong{font-weight:600}
+a{color:var(--petrol);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
+a:hover{color:var(--ink)}
+a:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:2px}
+code{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.84em;
+  background:var(--surface-2);padding:1px 5px;border-radius:3px;
+  border:1px solid var(--rule);white-space:nowrap;
+}
+
+/* ---------- rules callout ---------- */
+.rules{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1px;
+  background:var(--rule-strong);border:1px solid var(--rule-strong);margin:26px 0 8px;
+}
+.rule-card{background:var(--surface);padding:22px 22px 24px}
+.rule-card .rk{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin:0 0 9px;
+}
+.rule-card p{font-size:16px;margin:0;max-width:none}
+.rule-card .rk-b{color:var(--petrol)}
+
+/* ---------- decision box ---------- */
+.decide{
+  border-left:3px solid var(--amber);background:var(--amber-soft);
+  padding:18px 20px;margin:26px 0;max-width:68ch;
+}
+.decide .dh{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--amber-ink);margin:0 0 8px;
+}
+.decide p:last-child{margin-bottom:0}
+.decide p{font-size:16px}
+
+.flag{
+  border-left:3px solid var(--alert);background:var(--alert-soft);
+  padding:18px 20px;margin:26px 0;max-width:68ch;
+}
+.flag .dh{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--alert);margin:0 0 8px;
+}
+.flag p:last-child{margin-bottom:0}
+.flag p{font-size:16px}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;margin:22px 0;border:1px solid var(--rule);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+caption{
+  caption-side:top;text-align:left;font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);
+  padding:12px 14px;border-bottom:1px solid var(--rule);font-weight:700;
+}
+th,td{padding:8px 13px;text-align:left;border-bottom:1px solid var(--rule);vertical-align:top}
+thead th{
+  background:var(--surface-2);font-weight:700;font-size:12px;
+  letter-spacing:.04em;color:var(--ink);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+.c-pet{color:var(--petrol);font-weight:700}
+.c-amb{color:var(--amber);font-weight:700}
+.c-dim{color:var(--ink-3)}
+.win{background:var(--petrol-soft);font-weight:700}
+
+/* ---------- pipeline cycle charts ---------- */
+.ptable td.s{text-align:center;font-weight:700;font-size:12px;color:var(--st-ink);
+  border-left:1px solid var(--rule);min-width:40px;white-space:nowrap}
+.ptable td.ins{white-space:nowrap;font-size:12.5px;color:var(--ink)}
+.ptable thead th{text-align:center;font-size:11px}
+.ptable thead th:first-child{text-align:left}
+.s.IF{background:var(--st-if)}
+.s.OF,.s.ID,.s.RF{background:var(--st-of)}
+.s.EX,.s.E1,.s.E2{background:var(--st-ex)}
+.s.MA,.s.M1,.s.M2,.s.MW{background:var(--st-ma)}
+.s.RW{background:var(--st-rw)}
+.s.ST{background:var(--st-stall);color:var(--alert)}
+.s.FL{background:var(--st-flush);color:var(--st-flush-ink);text-decoration:line-through}
+.s.em{box-shadow:inset 0 0 0 2px var(--amber)}
+
+/* ---------- bit fields ---------- */
+.bfwrap{overflow-x:auto;margin:20px 0}
+.bitfield{display:flex;min-width:560px;border:1px solid var(--rule-strong);background:var(--surface)}
+.bf{border-right:1px solid var(--rule-strong);padding:9px 6px;text-align:center;
+  font-family:"JetBrains Mono",ui-monospace,monospace;min-width:0}
+.bf:last-child{border-right:0}
+.bf-bits{display:block;font-size:9.5px;letter-spacing:.06em;color:var(--ink-3);margin-bottom:3px}
+.bf-name{display:block;font-size:12px;font-weight:700;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis}
+.bf.op{background:var(--petrol-soft)}
+.bf.imm{background:var(--amber-soft)}
+
+/* ---------- code ---------- */
+pre{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12.5px;line-height:1.66;
+  background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--petrol);
+  padding:15px 17px;overflow-x:auto;margin:20px 0;color:var(--ink);
+}
+pre .cm{color:var(--ink-3)}
+pre .kw{color:var(--petrol);font-weight:700}
+pre .lb{color:var(--amber);font-weight:700}
+
+/* ---------- chart ---------- */
+.chart{margin:26px 0 8px;background:var(--surface);border:1px solid var(--rule);padding:14px 10px 8px}
+.chart svg{display:block;width:100%;height:auto;max-width:100%}
+.ax{stroke:var(--rule-strong);stroke-width:1}
+.grid{stroke:var(--rule);stroke-width:1;stroke-dasharray:2 4}
+.axtext{fill:var(--ink-3);font-family:"JetBrains Mono",monospace;font-size:11px}
+.axtitle{fill:var(--ink-2);font-family:"JetBrains Mono",monospace;font-size:11px;
+  letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.lgtext{fill:var(--ink-2);font-family:"JetBrains Mono",monospace;font-size:11px}
+.ln{fill:none;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
+.ln-4{stroke:var(--petrol)}
+.ln-5{stroke:var(--ink-3);stroke-width:1.6;stroke-dasharray:1 4}
+.ln-f{stroke:var(--amber);stroke-dasharray:7 5}
+.ln-g{stroke:var(--amber)}
+.dot-g{fill:var(--amber)}
+.note{font-size:14px;color:var(--ink-2);font-family:"Source Serif 4",serif;
+  margin:10px 0 0;max-width:68ch}
+
+/* ---------- reading list ---------- */
+.refs{display:flex;flex-direction:column;gap:0;margin:22px 0;
+  border-top:1px solid var(--rule)}
+.ref{display:grid;grid-template-columns:34px 1fr;gap:14px;
+  padding:15px 0;border-bottom:1px solid var(--rule)}
+.ref .rn{font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:700;
+  color:var(--ink-3);padding-top:4px}
+.ref .rt{font-weight:600;font-size:16.5px;margin:0 0 3px;line-height:1.35}
+.ref .rw{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-3);
+  margin:0 0 6px;letter-spacing:.02em}
+.ref .rd{font-size:15px;color:var(--ink-2);margin:0;max-width:64ch}
+.reftag{display:inline-block;font-family:"JetBrains Mono",monospace;font-size:9.5px;
+  font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;
+  border-radius:2px;margin-left:7px;vertical-align:2px;
+  background:var(--petrol-soft);color:var(--petrol-ink);border:1px solid var(--rule)}
+.reftag.core{background:var(--amber-soft);color:var(--amber-ink)}
+
+/* ---------- plan ---------- */
+.plan{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1px;
+  background:var(--rule-strong);border:1px solid var(--rule-strong);margin:24px 0}
+.pd{background:var(--surface);padding:18px 18px 20px}
+.pd .pday{font-family:"JetBrains Mono",monospace;font-size:10.5px;font-weight:700;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--petrol);margin:0 0 9px}
+.pd ul{margin:0;padding-left:17px;font-size:15px}
+.pd li{margin-bottom:5px}
+
+footer{padding-block:40px 64px;color:var(--ink-3);font-size:14px}
+footer p{max-width:68ch}
+
+@media (max-width:640px){
+  body{font-size:16px;padding-inline:16px}
+  .mast{padding-block:44px 30px}
+  section{padding-block:40px}
+  .ref{grid-template-columns:1fr;gap:4px}
+  .ref .rn{padding-top:0}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="eyebrow">CSC-201 · Autumn 2026 · Assignment 1, Part 1</p>
+  <h1>RISC201 Processor Design</h1>
+  <p class="standfirst">What a 4-stage and a 6-stage RISC201 core actually are, how to build both so the comparison means something, and the research that will hold up under questioning.</p>
+  <p class="meta">
+    <span>Scope: Part 1 (a/b/c) in depth</span>
+    <span>Parts 2–5 as architecture</span>
+    <span>Eval 1: 30 Sep</span>
+  </p>
+</header>
+
+<section>
+  <div class="shead"><span class="snum">00</span><h2>Read the spec again — it changes the answer</h2></div>
+  <p class="lede">This is not an RTL project. Items 2–4 make it a <strong>software simulator</strong> project: an assembler, a disassembler, a CLI debugger, a microcode engine and an ALU class. That single fact reshapes how you should approach Part 1.</p>
+
+  <p>In hardware, "compare the behavior of the 4-stage and 6-stage" is answered by synthesis: you get an F<sub>max</sub> and an area number from the tools. In a simulator you get neither for free. A cycle-accurate model will happily tell you the 6-stage core takes more cycles — and if you stop there you will conclude, wrongly, that deeper is worse. The whole reason anyone lengthens a pipeline is to shorten the clock period, and a simulator does not model clock period unless you make it.</p>
+
+  <p>So the load-bearing decision in this project is one the spec never mentions: <strong>you must adopt an explicit delay model</strong>, state its assumptions, and report time-per-instruction, not just cycles. Everything in §01 is built around that. Do this and your evaluation section writes itself; skip it and item 5 collapses into a stall-count table with no conclusion in it.</p>
+
+  <div class="flag">
+    <p class="dh">Confirm before you build</p>
+    <p>The handout says "RISC201 ISA" but does not attach a spec. Everything below assumes RISC201 is the course's version of <strong>SimpleRisc</strong> from Sarangi — 21 instructions, 16 registers (<code>r14</code>=sp, <code>r15</code>=ra), fixed 32-bit encoding, three formats, a hidden 2-bit <code>flags</code> register. Get the exact opcode map from your instructor or handout and diff it against Sarangi ch. 3 before you write the encoder. An opcode table baked into the wrong assumption is expensive to unpick later.</p>
+  </div>
+
+  <h3>The one architectural decision that makes the rest easy</h3>
+  <p>You will write an assembler, a disassembler, three or four execution cores, a microcode assembler and a test suite. Each of those needs to know the same thing: what the instructions are and how they are encoded. Write that down <strong>once</strong>, as data, and generate everything else from it.</p>
+
+  <pre><span class="cm"># isa/table.py — the single source of truth</span>
+<span class="kw">INSTRUCTIONS</span> = [
+  <span class="cm">#  mnem   opcode  format   operands              flags  modifiers</span>
+  Inst(<span class="lb">"add"</span>,  0b00000, <span class="lb">"R/I"</span>, (<span class="lb">"rd"</span>,<span class="lb">"rs1"</span>,<span class="lb">"rs2|imm"</span>), <span class="kw">False</span>, <span class="kw">True</span>),
+  Inst(<span class="lb">"cmp"</span>,  0b00101, <span class="lb">"R/I"</span>, (<span class="lb">"rs1"</span>,<span class="lb">"rs2|imm"</span>),      <span class="kw">True</span>,  <span class="kw">True</span>),
+  Inst(<span class="lb">"ld"</span>,   0b01110, <span class="lb">"I"</span>,   (<span class="lb">"rd"</span>,<span class="lb">"imm[rs1]"</span>),      <span class="kw">False</span>, <span class="kw">False</span>),
+  Inst(<span class="lb">"beq"</span>,  0b10000, <span class="lb">"B"</span>,   (<span class="lb">"label"</span>,),             <span class="kw">False</span>, <span class="kw">False</span>),
+  <span class="cm"># ... 21 rows total</span>
+]</pre>
+
+  <p>The assembler's encoder, the disassembler's decoder, every core's decode stage, the microcode dispatch ROM and the random-program generator in your tests all read this list. When the opcode map turns out to be different from what you assumed, you change one row. This is worth an hour on day one and saves days later.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">01a</span><h2>What a 4-stage and a 6-stage core actually are</h2></div>
+
+  <p class="lede">Sarangi's reference design is a 5-stage pipeline: <strong>IF</strong> (fetch) · <strong>OF</strong> (operand fetch: decode + register read) · <strong>EX</strong> (execute) · <strong>MA</strong> (memory access) · <strong>RW</strong> (register write). A 4-stage core merges two adjacent stages; a 6-stage core splits one. Which two you merge, and which one you split, is the entire design question — and it is not arbitrary.</p>
+
+  <h3>Two rules that decide everything</h3>
+  <p>Before looking at any specific organization, internalize these. They come straight from the structure of the pipeline and they let you predict the CPI of any depth without simulating it.</p>
+
+  <div class="rules">
+    <div class="rule-card">
+      <p class="rk rk-b">Rule 1 · control hazards</p>
+      <p>A branch costs one flushed instruction for every stage <em>before</em> the stage where its outcome and target become known. Stages added <em>after</em> the resolution point are free in control-hazard terms; stages added before it cost one bubble each, on every taken branch.</p>
+    </div>
+    <div class="rule-card">
+      <p class="rk">Rule 2 · load-use hazards</p>
+      <p>A load-use stall lasts as long as the gap between the cycle a consumer needs its operand (its first execute cycle) and the cycle the load's data becomes available. Stages inserted <em>between</em> execute and the point the load data lands widen that gap by one bubble each.</p>
+    </div>
+  </div>
+
+  <p>Together these say something useful: the two hazard types pull in opposite directions depending on <em>where</em> you change the depth. That is why "4-stage vs 6-stage" has no single answer, and why the comparison the assignment asks for is a real question rather than a formality.</p>
+
+  <h3>Candidate 4-stage organizations</h3>
+
+  <div class="tw">
+    <table>
+      <caption>Merging one pair of adjacent stages — three viable cuts</caption>
+      <thead><tr><th>Variant</th><th>Stages</th><th>Branch penalty</th><th>Load-use</th><th>Cost of the merge</th></tr></thead>
+      <tbody>
+        <tr><td><strong class="c-pet">4A</strong></td><td>IF · OF · EX · MA+RW</td><td class="num">2</td><td class="num">1</td><td>Memory access plus register-write setup in one cycle. Longest stage in the machine.</td></tr>
+        <tr><td><strong class="c-pet">4B</strong></td><td>IF · OF+EX · MA · RW</td><td class="num">1</td><td class="num">1</td><td>Register read then ALU, serially, in one cycle. Usually the critical path. Avoid.</td></tr>
+        <tr><td><strong class="c-pet">4C</strong></td><td>IF+OF · EX · MA · RW</td><td class="num">1</td><td class="num">1</td><td>I-memory fetch plus decode plus register read in one cycle. Viable if I-memory is fast.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>4A</strong> is the conventional choice and the easiest to write. Note what it does and does not buy you. It does <em>not</em> reduce the load-use penalty — the load's data still arrives one cycle too late for the next instruction:</p>
+
+  <div class="tw">
+    <table class="ptable">
+      <caption>4A · load-use: one bubble, unchanged from 5-stage</caption>
+      <thead><tr><th>Instruction</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr></thead>
+      <tbody>
+        <tr><td class="ins">ld  r1, 0[r2]</td><td class="s IF">IF</td><td class="s OF">OF</td><td class="s EX">EX</td><td class="s MW em">MW</td><td></td><td></td><td></td></tr>
+        <tr><td class="ins">add r3, r1, r4</td><td></td><td class="s IF">IF</td><td class="s OF">OF</td><td class="s ST">stall</td><td class="s EX em">EX</td><td class="s MW">MW</td><td></td></tr>
+        <tr><td class="ins">sub r5, r3, r6</td><td></td><td></td><td class="s IF">IF</td><td class="s ST">stall</td><td class="s OF">OF</td><td class="s EX">EX</td><td class="s MW">MW</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>What it <em>does</em> buy is one fewer forwarding path. In the 5-stage core, three sources feed each operand mux (EX, MA, RW); in 4A there are two (EX, MW). That matters more than it sounds: Schoeberl's <em>Wildcat</em> study found the forwarding multiplexer in the execute stage sits on the critical path, and that widening it as pipelines lengthen can make a 4- or 5-stage core <em>slower</em> than a 3-stage one on the same FPGA. Shallower is not automatically slower.</p>
+
+  <h3>Candidate 6-stage organizations</h3>
+
+  <div class="tw">
+    <table>
+      <caption>Splitting one stage — where you split decides which hazard you pay for</caption>
+      <thead><tr><th>Variant</th><th>Stages</th><th>Branch penalty</th><th>Load-use</th><th>Why you would do it</th></tr></thead>
+      <tbody>
+        <tr><td><strong class="c-amb">6D</strong></td><td>IF · ID · OF · EX · MA · RW</td><td class="num">3</td><td class="num">1</td><td>Separates decode from register read. Helps if the regfile is slow.</td></tr>
+        <tr><td><strong class="c-amb">6E</strong></td><td>IF1 · IF2 · OF · EX · MA · RW</td><td class="num">3</td><td class="num">1</td><td>Pipelined I-cache, or room for a branch-target buffer lookup.</td></tr>
+        <tr><td><strong class="c-amb">6F</strong></td><td>IF · OF · EX1 · EX2 · MA · RW</td><td class="num">3</td><td class="num">2</td><td>A two-cycle ALU. The honest answer for an ISA with <code>mul</code>.</td></tr>
+        <tr><td><strong class="c-amb">6G</strong></td><td>IF · OF · EX · MA1 · MA2 · RW</td><td class="num">2</td><td class="num">2</td><td>Pipelined D-cache: tag access, then data select.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Apply Rule 1 to <strong>6G</strong>: both added stages sit after the branch resolves in EX, so the branch penalty stays at 2 — identical to the 5-stage core. Apply Rule 2: both added stages sit between EX and writeback, so load-use doubles to 2. <strong>6D</strong> is the mirror image — the branch penalty rises to 3 while load-use is untouched.</p>
+
+  <div class="tw">
+    <table class="ptable">
+      <caption>6D · control hazard: three instructions discarded on a taken branch</caption>
+      <thead><tr><th>Instruction</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr></thead>
+      <tbody>
+        <tr><td class="ins">bgt .loop</td><td class="s IF">IF</td><td class="s ID">ID</td><td class="s OF">OF</td><td class="s EX em">EX</td><td class="s MA">MA</td><td class="s RW">RW</td><td></td></tr>
+        <tr><td class="ins">(fall-through +4)</td><td></td><td class="s FL">IF</td><td class="s FL">ID</td><td class="s FL">OF</td><td></td><td></td><td></td></tr>
+        <tr><td class="ins">(fall-through +8)</td><td></td><td></td><td class="s FL">IF</td><td class="s FL">ID</td><td></td><td></td><td></td></tr>
+        <tr><td class="ins">(fall-through +12)</td><td></td><td></td><td></td><td class="s FL">IF</td><td></td><td></td><td></td></tr>
+        <tr><td class="ins">.loop: mul r1,r1,r2</td><td></td><td></td><td></td><td></td><td class="s IF em">IF</td><td class="s ID">ID</td><td class="s OF">OF</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="decide">
+    <p class="dh">Pick a pair, and pick it for a reason</p>
+    <p>Recommended: <strong>4A</strong> (IF · OF · EX · MA+RW) against <strong>6G</strong> (IF · OF · EX · MA1 · MA2 · RW). They differ in depth by two, they differ in <em>which</em> hazard they pay, and — as the delay analysis below shows — which one wins flips depending on a single parameter. That flip is the finding your report is built on.</p>
+    <p>If you would rather tell the multiplier story, use <strong>6F</strong> instead: RISC201 has <code>mul</code>, <code>div</code> and <code>mod</code> in the ISA, and none of them fit in a single fast ALU cycle. A two-cycle EX is the most defensible engineering reason to go to six stages at all, and it links Part 1a directly to Part 1c.</p>
+  </div>
+
+  <h3>The delay model — the part you cannot skip</h3>
+  <p>Express every datapath block's delay in <strong>FO4</strong> (the delay of an inverter driving four identical inverters) — the standard process-independent unit in this literature. Then the clock period of an <em>N</em>-stage pipeline is the slowest stage plus latch overhead:</p>
+
+  <pre>T_clk   = max(stage logic delay) + latch overhead
+CPI     = 1 + f_br·P_br + f_lu·P_lu + f_muldiv·(L_muldiv − 1)
+Time/instruction = CPI × T_clk</pre>
+
+  <div class="tw">
+    <table>
+      <caption>A starting delay budget · FO4 · adjust and document your own</caption>
+      <thead><tr><th>Datapath block</th><th class="num">FO4</th><th>Basis</th></tr></thead>
+      <tbody>
+        <tr><td>I-memory / small I-cache access</td><td class="num">9</td><td>Dominates the fetch stage</td></tr>
+        <tr><td>Instruction decode (fixed 32-bit, 3 formats)</td><td class="num">3</td><td>Cheap — RISC201 was designed for this</td></tr>
+        <tr><td>Register file read (16×32, 2R1W)</td><td class="num">4</td><td>Small file, only 16 entries</td></tr>
+        <tr><td>Forwarding mux (3:1) + immediate select</td><td class="num">2</td><td>Grows with pipeline depth — see Wildcat</td></tr>
+        <tr><td>32-bit adder, Kogge–Stone</td><td class="num">8</td><td>log-depth prefix tree</td></tr>
+        <tr><td>32-bit adder, ripple-carry</td><td class="num">64</td><td>For contrast — never put this in EX</td></tr>
+        <tr><td>Barrel shifter (5 mux levels)</td><td class="num">5</td><td>Parallel to the adder, not in series</td></tr>
+        <tr><td>ALU result mux</td><td class="num">1</td><td></td></tr>
+        <tr><td>D-memory / D-cache access</td><td class="num" style="color:var(--amber);font-weight:700">M</td><td>Swept as the free parameter, 6–18</td></tr>
+        <tr><td>Register file write setup</td><td class="num">2</td><td></td></tr>
+        <tr><td>Pipeline latch (clk→Q + setup)</td><td class="num">3</td><td>Paid once per stage, every stage</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Sanity check: Hrishikesh et al. found the optimal logic depth per stage is 6–8 FO4, so stages landing in that range mean the budget is realistic. Stages at 20 FO4 mean you have merged too much.</p>
+
+  <h4>Worked comparison at M = 10 FO4</h4>
+
+  <div class="tw">
+    <table>
+      <caption>Stage delays, FO4 · f_br = 0.12 mispredicts/inst, f_lu = 0.10 load-use/inst</caption>
+      <thead><tr><th>Stage</th><th class="num">4A</th><th class="num">5-stage ref</th><th class="num">6F</th><th class="num">6G</th></tr></thead>
+      <tbody>
+        <tr><td>IF</td><td class="num">9</td><td class="num">9</td><td class="num">9</td><td class="num">9</td></tr>
+        <tr><td>OF</td><td class="num">6</td><td class="num">6</td><td class="num">6</td><td class="num">6</td></tr>
+        <tr><td>EX</td><td class="num">10</td><td class="num">10</td><td class="num">6 / 6</td><td class="num">10</td></tr>
+        <tr><td>MA</td><td class="num">12 <span class="c-dim">(+RW)</span></td><td class="num">10</td><td class="num">10</td><td class="num">5 / 5</td></tr>
+        <tr><td>RW</td><td class="num c-dim">—</td><td class="num">2</td><td class="num">2</td><td class="num">2</td></tr>
+        <tr><td><strong>Critical stage</strong></td><td class="num"><strong>12</strong></td><td class="num"><strong>10</strong></td><td class="num"><strong>10</strong></td><td class="num"><strong>10</strong></td></tr>
+        <tr><td><strong>T_clk</strong> (+3)</td><td class="num"><strong>15</strong></td><td class="num"><strong>13</strong></td><td class="num"><strong>13</strong></td><td class="num"><strong>13</strong></td></tr>
+        <tr><td>Branch penalty</td><td class="num">2</td><td class="num">2</td><td class="num">3</td><td class="num">2</td></tr>
+        <tr><td>Load-use penalty</td><td class="num">1</td><td class="num">1</td><td class="num">2</td><td class="num">2</td></tr>
+        <tr><td><strong>CPI</strong></td><td class="num"><strong>1.34</strong></td><td class="num"><strong>1.34</strong></td><td class="num"><strong>1.56</strong></td><td class="num"><strong>1.44</strong></td></tr>
+        <tr><td><strong>FO4 / instruction</strong></td><td class="num"><strong>20.1</strong></td><td class="num win"><strong>17.4</strong></td><td class="num"><strong>20.3</strong></td><td class="num"><strong>18.7</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Two results fall out immediately, and both are worth writing up.</p>
+  <p><strong>Splitting a stage that is not the bottleneck buys nothing.</strong> In 6F the EX stage is halved to 6 FO4 — and the clock period does not move, because MA is still sitting at 10. You have paid a full bubble on every branch and every load-use for zero frequency. This is Amdahl's law wearing a pipeline costume, and it is the single most common mistake in student pipeline designs.</p>
+  <p><strong>At this memory latency, the 5-stage reference beats everything.</strong> Deeper is not better by default — exactly the conclusion Hartstein and Puzak reach analytically, and Schoeberl reaches experimentally on real silicon.</p>
+
+  <h4>Sweep the memory latency and the ranking inverts</h4>
+  <p>M is the one parameter you genuinely do not know, so make it the independent variable. In 6G the memory stage is split in two, so its per-stage delay is <em>M</em>/2 — which means once <em>M</em>/2 drops below the EX delay, 6G's clock period stops responding to memory latency entirely.</p>
+
+  <div class="chart">
+    <svg viewBox="0 0 720 410" role="img" aria-label="Line chart of FO4 per instruction against D-memory latency for four pipeline organizations. The 6G six-stage design flattens at 18.7 while all others rise linearly.">
+      <g class="lgtext">
+        <line x1="70" y1="18" x2="98" y2="18" class="ln ln-4"/><text x="104" y="22">4A (4-stage)</text>
+        <line x1="212" y1="18" x2="240" y2="18" class="ln ln-5"/><text x="246" y="22">5-stage ref</text>
+        <line x1="352" y1="18" x2="380" y2="18" class="ln ln-f"/><text x="386" y="22">6F (split EX)</text>
+        <line x1="512" y1="18" x2="540" y2="18" class="ln ln-g"/><text x="546" y="22">6G (split MA)</text>
+      </g>
+
+      <line class="grid" x1="70" y1="350" x2="690" y2="350"/>
+      <line class="grid" x1="70" y1="271" x2="690" y2="271"/>
+      <line class="grid" x1="70" y1="192" x2="690" y2="192"/>
+      <line class="grid" x1="70" y1="113" x2="690" y2="113"/>
+
+      <line class="ax" x1="70" y1="50" x2="70" y2="350"/>
+      <line class="ax" x1="70" y1="350" x2="690" y2="350"/>
+
+      <g class="axtext" text-anchor="end">
+        <text x="60" y="354">15</text><text x="60" y="275">20</text>
+        <text x="60" y="196">25</text><text x="60" y="117">30</text>
+      </g>
+      <g class="axtext" text-anchor="middle">
+        <text x="70" y="370">6</text><text x="173" y="370">8</text><text x="277" y="370">10</text>
+        <text x="380" y="370">12</text><text x="483" y="370">14</text><text x="587" y="370">16</text>
+        <text x="690" y="370">18</text>
+      </g>
+      <text class="axtitle" x="380" y="396" text-anchor="middle">D-memory access latency · FO4</text>
+      <text class="axtitle" x="20" y="200" text-anchor="middle" transform="rotate(-90 20 200)">FO4 per instruction</text>
+
+      <polyline class="ln ln-4" points="70,311.8 173.3,311.8 276.7,269.5 380,227.2 483.3,184.8 586.7,142.5 690,100.2"/>
+      <polyline class="ln ln-5" points="70,311.8 173.3,311.8 276.7,311.8 380,269.5 483.3,227.2 586.7,184.8 690,142.5"/>
+      <polyline class="ln ln-f" points="70,291.3 173.3,291.3 276.7,266.6 380,217.4 483.3,168.1 586.7,118.8 690,69.6"/>
+      <polyline class="ln ln-g" points="70,291.3 173.3,291.3 276.7,291.3 380,291.3 483.3,291.3 586.7,291.3 690,291.3"/>
+      <circle class="dot-g" cx="690" cy="291.3" r="4"/>
+      <text class="axtext" x="682" y="282" text-anchor="end" style="fill:var(--amber);font-weight:700">18.7 — flat</text>
+    </svg>
+  </div>
+
+  <p class="note">Lower is faster. Hue encodes depth (petrol = 4-stage, amber = 6-stage); dash encodes the variant. Below roughly M = 9 the shallow cores win; above it, 6G pulls away and never comes back, because it is the only design whose critical stage is no longer memory.</p>
+
+  <p>That crossover is your headline result. It says the correct pipeline depth for RISC201 is a function of the memory system, not a property of the ISA — which is precisely the conclusion the pipeline-depth literature has been drawing since 2002, arrived at from your own model.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">01b</span><h2>The microprogrammed control unit</h2></div>
+
+  <p class="lede">Item 1b asks for a microprogrammed control unit; item 3 asks you to put microcode into the simulator in place of hardwired control. There is a structural catch here that will cost you a week if you notice it late.</p>
+
+  <div class="flag">
+    <p class="dh">Microcode does not drive a pipeline</p>
+    <p>Classic microprogramming assumes a <strong>multi-cycle, bus-based datapath</strong> where each microinstruction performs one register-transfer step: <code>MAR ← PC</code>, then <code>MDR ← M[MAR]</code>, then <code>IR ← MDR</code>. A pipelined datapath has no such sequencing — every stage does its fixed job every cycle, and "control" is a per-stage signal vector derived combinationally from the opcode. You cannot simply bolt a control store onto your 4-stage core and call it microprogrammed.</p>
+    <p>So Part 3 is effectively a <strong>third execution core</strong>: a multi-cycle microcoded machine alongside the two pipelines. Build it that way. (The alternative reading — store each pipeline stage's control vector in a ROM indexed by opcode — is a decode ROM, not microprogramming, and gives you nothing to compare horizontally against vertically.) This is the first thing to raise with your instructor.</p>
+  </div>
+
+  <h3>The multi-cycle datapath to control</h3>
+  <p>Give the microcoded core its own internal state: <code>PC</code>, <code>IR</code>, <code>MAR</code>, <code>MDR</code>, operand latches <code>A</code> and <code>B</code>, <code>ALUout</code>, <code>FLAGS</code>, plus the 16×32 register file. Every microinstruction asserts a set of control signals for exactly one clock.</p>
+
+  <h4>Horizontal microinstruction format · 48 bits</h4>
+  <div class="bfwrap">
+    <div class="bitfield">
+      <div class="bf op" style="flex:5"><span class="bf-bits">47:43</span><span class="bf-name">ALU_OP</span></div>
+      <div class="bf" style="flex:3"><span class="bf-bits">42:40</span><span class="bf-name">SRC_A</span></div>
+      <div class="bf" style="flex:3"><span class="bf-bits">39:37</span><span class="bf-name">SRC_B</span></div>
+      <div class="bf" style="flex:8"><span class="bf-bits">36:29</span><span class="bf-name">LOAD_EN ×8</span></div>
+      <div class="bf" style="flex:6"><span class="bf-bits">28:23</span><span class="bf-name">RF_SEL</span></div>
+      <div class="bf" style="flex:3"><span class="bf-bits">22:20</span><span class="bf-name">RF_W</span></div>
+      <div class="bf" style="flex:2"><span class="bf-bits">19:18</span><span class="bf-name">MEM</span></div>
+      <div class="bf" style="flex:2"><span class="bf-bits">17:16</span><span class="bf-name">PC_SEL</span></div>
+      <div class="bf" style="flex:2"><span class="bf-bits">15:14</span><span class="bf-name">SEQ</span></div>
+      <div class="bf" style="flex:3"><span class="bf-bits">13:11</span><span class="bf-name">COND</span></div>
+      <div class="bf imm" style="flex:11"><span class="bf-bits">10:0</span><span class="bf-name">NEXT_μADDR</span></div>
+    </div>
+  </div>
+
+  <p>The eight <code>LOAD_EN</code> bits are one-hot write enables for <code>A</code>, <code>B</code>, <code>ALUout</code>, <code>MAR</code>, <code>MDR</code>, <code>IR</code>, <code>PC</code>, <code>FLAGS</code>. <code>SEQ</code> selects the next microaddress: <code>00</code> fall through, <code>01</code> jump to <code>NEXT</code>, <code>10</code> dispatch, <code>11</code> conditional branch on <code>COND</code>.</p>
+
+  <h4>The dispatch ROM is the mechanism that matters</h4>
+  <p>Every instruction's microroutine begins with the same fetch sequence and ends by jumping back to it. Between them sits the dispatch: a small 32-entry mapping ROM that turns the 5-bit opcode in <code>IR[31:27]</code> into a microaddress. Get this right and the microprogram is short; get it wrong and you write a 21-way microcoded comparison chain.</p>
+
+  <pre><span class="cm">; ---- common fetch, 4 microinstructions ----</span>
+<span class="lb">FETCH:</span>  MAR <span class="kw">&lt;-</span> PC                    ; SRC_A=PC, ALU=PASS, LD_MAR
+        MDR <span class="kw">&lt;-</span> M[MAR]                ; MEM=READ, LD_MDR
+        IR  <span class="kw">&lt;-</span> MDR ; PC <span class="kw">&lt;-</span> PC + 4     ; LD_IR, LD_PC, SRC_B=4, ALU=ADD
+        A <span class="kw">&lt;-</span> RF[rs1] ; B <span class="kw">&lt;-</span> src2       ; LD_A, LD_B, SEQ=DISPATCH
+                                        ;   -&gt; uADDR = DISPATCH_ROM[IR[31:27]]
+
+<span class="cm">; ---- one routine per opcode ----</span>
+<span class="lb">U_ADD:</span>  ALUout <span class="kw">&lt;-</span> A + B               ; ALU=ADD, LD_ALUOUT
+        RF[rd] <span class="kw">&lt;-</span> ALUout              ; RF_W=rd, SEQ=JUMP FETCH
+
+<span class="lb">U_LD:</span>   ALUout <span class="kw">&lt;-</span> A + imm             ; effective address
+        MAR <span class="kw">&lt;-</span> ALUout
+        MDR <span class="kw">&lt;-</span> M[MAR]                ; MEM=READ
+        RF[rd] <span class="kw">&lt;-</span> MDR                 ; SEQ=JUMP FETCH
+
+<span class="lb">U_BEQ:</span>  <span class="kw">if</span> !flags.E <span class="kw">goto</span> FETCH         ; SEQ=CONDBR, COND=NOT_E
+        PC <span class="kw">&lt;-</span> PC + (offset &lt;&lt; 2)     ; SEQ=JUMP FETCH</pre>
+
+  <h3>Horizontal, vertical, nano — and what to measure</h3>
+  <p>The horizontal format above spends one bit (or one small field) per control signal: wide words, maximum parallelism per microinstruction, no decoder. A vertical format encodes the same signals into a compact micro-opcode — say 20 bits — and expands it through a micro-decoder. Narrower control store, but fewer signals assertable per microinstruction, so routines get longer.</p>
+
+  <p>Nanoprogramming is the two-level hybrid: a wide vertical micro-store whose entries point into a small nano-store of distinct horizontal control words. It was used in the Nanodata QM-1 and the Motorola 68000, and it pays off precisely when many microinstructions repeat the same control pattern.</p>
+
+  <div class="tw">
+    <table>
+      <caption>What to instrument · these four numbers are your Part 5 comparison</caption>
+      <thead><tr><th>Metric</th><th>Horizontal</th><th>Vertical</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td>Control store width</td><td>48 bits</td><td>20 bits</td><td>Direct area/storage cost</td></tr>
+        <tr><td>Microinstructions in the program</td><td>fewer</td><td>more</td><td>Less parallelism per word</td></tr>
+        <tr><td><strong>Total control store bits</strong></td><td>width × count</td><td>width × count</td><td>Where vertical usually wins</td></tr>
+        <tr><td><strong>μinstructions executed / instruction</strong></td><td>lower</td><td>higher</td><td>This <em>is</em> the CPI of the microcoded core</td></tr>
+        <tr><td>Decoder delay</td><td>none</td><td>one level</td><td>Vertical pays it every cycle</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Report both control-store size and executed-microinstruction count for the same benchmark set. The expected shape: vertical saves store bits but costs cycles; nanoprogramming only beats plain vertical once the microprogram is large enough that repeated control patterns outweigh the second-level indirection. On a 21-instruction ISA it may well lose — and saying so, with your own numbers, is a better result than reproducing the textbook claim.</p>
+
+  <p>For the CLI, expose <code>μPC</code>, the current microinstruction's decoded field values, and the dispatch target. The spec asks for this explicitly ("display the microPC's step-by-step state"), and it is also the only practical way to debug a microprogram.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">01c</span><h2>The ALU</h2></div>
+
+  <p class="lede">RISC201 needs <code>add sub mul div mod cmp and or not lsl lsr asr mov</code> plus effective-address arithmetic. "Efficient" here means: pick real algorithms, make them swappable, and report the delay and area each one implies.</p>
+
+  <h3>Adders — the one place to use published numbers</h3>
+  <p>Parallel prefix adders are a well-characterized family, and the depth/area formulas are exact. This table is the cheapest rigour in the whole project.</p>
+
+  <div class="tw">
+    <table>
+      <caption>Prefix tree topologies · general formula and n = 32 evaluated</caption>
+      <thead><tr><th>Topology</th><th>Logic depth</th><th class="num">n=32</th><th>Operator nodes</th><th class="num">n=32</th><th>Character</th></tr></thead>
+      <tbody>
+        <tr><td>Ripple-carry</td><td>n</td><td class="num">32</td><td>n</td><td class="num">32</td><td>Smallest, hopeless delay</td></tr>
+        <tr><td>Brent–Kung</td><td>2log₂n − 2</td><td class="num">8</td><td>2n − log₂n − 2</td><td class="num">57</td><td>Fewest nodes, light wiring</td></tr>
+        <tr><td>Sklansky</td><td>log₂n</td><td class="num">5</td><td>(n/2)·log₂n</td><td class="num">80</td><td>Min depth, high fan-out</td></tr>
+        <tr><td>Kogge–Stone</td><td>log₂n</td><td class="num">5</td><td>n·log₂(n/2) + 1</td><td class="num">129</td><td>Fastest, heavy wiring</td></tr>
+        <tr><td>Han–Carlson</td><td>log₂n + 1</td><td class="num">6</td><td>(n/2)·log₂n</td><td class="num">80</td><td>KS/BK hybrid, good balance</td></tr>
+        <tr><td>Ladner–Fischer</td><td>log₂n + 1</td><td class="num">6</td><td>(3/4)n − 1 + (n/4)·log₂n</td><td class="num">63</td><td>Area-efficient middle ground</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Implement at least ripple-carry, Brent–Kung and Kogge–Stone as interchangeable classes. Subtraction reuses the same adder: invert B, set carry-in. That gives <code>sub</code> and <code>cmp</code> for free.</p>
+
+  <h4>Flags — the correctness trap</h4>
+  <p><code>cmp</code> sets <code>flags.E</code> and <code>flags.GT</code>. Computing GT as "the subtraction result is positive" is wrong: it breaks on signed overflow. The correct signed condition is</p>
+  <pre>E  = (result == 0)
+GT = (N == V) <span class="kw">and</span> <span class="kw">not</span> Z      <span class="cm"># N = result[31], V = signed overflow</span></pre>
+  <p>Write a directed test for <code>cmp r1, r2</code> with <code>r1 = 0x7FFFFFFF</code>, <code>r2 = 0x80000000</code>. The naive implementation gets it backwards, and every <code>bgt</code> in every benchmark inherits the bug.</p>
+
+  <h3>Multiplier</h3>
+  <ul>
+    <li><strong>Shift-and-add</strong> — 32 iterations, one adder. Baseline.</li>
+    <li><strong>Booth radix-2</strong> — same 32 iterations, but handles signed operands natively instead of needing sign-correction.</li>
+    <li><strong>Modified Booth radix-4</strong> — recodes the multiplier two bits at a time: 16 partial products instead of 32.</li>
+    <li><strong>Wallace / Dadda tree</strong> — reduces those 16 partial products to two with carry-save adders in about 6 levels, then one 64-bit carry-propagate adder. Radix-4 Booth plus a Wallace tree is the standard high-speed combination.</li>
+  </ul>
+
+  <h3>Divider — and <code>mod</code> comes free</h3>
+  <ul>
+    <li><strong>Restoring</strong> — n iterations; subtract, and restore the partial remainder if it went negative.</li>
+    <li><strong>Non-restoring</strong> — n iterations with no restore step; add or subtract based on the sign of the running remainder, with one final correction.</li>
+    <li><strong>SRT radix-2 / radix-4</strong> — redundant quotient digits and a quotient-digit selection table driven by a truncated partial remainder. Worth a line in your report: the 1994 Pentium FDIV bug was five missing entries in exactly such a table.</li>
+  </ul>
+  <p>One divider serves both <code>div</code> and <code>mod</code> — quotient and remainder fall out of the same recurrence. Division by zero raises an exception, which is your first customer for the runtime exception framework in item 2f.</p>
+
+  <h3>Shifter</h3>
+  <p>A 32-bit barrel shifter is five levels of 2:1 muxes with shift distances 16, 8, 4, 2, 1 — roughly 5 FO4 and, importantly, <em>parallel</em> to the adder rather than in series with it, so it does not extend the ALU critical path. <code>asr</code> fills vacated positions with the sign bit; <code>lsr</code> fills with zero; <code>lsl</code> can share the same network with a reversed input.</p>
+
+  <div class="decide">
+    <p class="dh">This is where the ALU meets Part 1a</p>
+    <p><code>mul</code>, <code>div</code> and <code>mod</code> cannot complete in one EX cycle. Whatever you decide here propagates straight back into both pipelines, and you have three options: <strong>(i)</strong> a multi-cycle iterative unit that stalls the pipeline behind it, <strong>(ii)</strong> a separate functional unit with its own latency and out-of-order writeback — which introduces WAW hazards you must then handle, or <strong>(iii)</strong> in the 6-stage, a two-cycle EX (variant <strong>6F</strong>) sized to fit a Booth–Wallace multiplier.</p>
+    <p>Option (iii) is the cleanest justification for a 6-stage RISC201 that exists, and it makes your two cores differ for a reason a hardware engineer would recognise rather than because the assignment asked for two numbers.</p>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">02</span><h2>Software architecture</h2></div>
+
+  <p class="lede">Items 2–4 are a lot of surface area for four people. The structure below makes most of it fall out of shared components rather than being written five times.</p>
+
+  <pre>risc201/
+  isa/        table.py         <span class="cm"># THE source of truth (§00)</span>
+              encoding.py      <span class="cm"># field packing/unpacking, both directions</span>
+  asm/        preprocess.py    <span class="cm"># macro expansion — runs BEFORE pass 1</span>
+              pass1.py         <span class="cm"># location counter, symbol table</span>
+              pass2.py         <span class="cm"># encode, resolve, emit bin/hex</span>
+  disasm/     decode.py        <span class="cm"># must round-trip against asm/</span>
+  alu/        adders.py        <span class="cm"># RippleCarry | BrentKung | KoggeStone</span>
+              multipliers.py   <span class="cm"># ShiftAdd | BoothR2 | BoothR4Wallace</span>
+              dividers.py      <span class="cm"># Restoring | NonRestoring | SRT4</span>
+              shifter.py       <span class="cm"># barrel</span>
+  core/       functional.py    <span class="cm"># GOLDEN single-cycle reference</span>
+              pipe4.py         <span class="cm"># 4-stage</span>
+              pipe6.py         <span class="cm"># 6-stage</span>
+              micro.py         <span class="cm"># multi-cycle microcoded</span>
+              ucode/*.uasm     <span class="cm"># microassembly + its assembler</span>
+  memory/     memory.py  stack_guard.py
+  exceptions/ vectors.py
+  cli/        repl.py  commands.py
+  viz/        stack_ascii.py  pipeline_ascii.py
+  bench/      *.s              <span class="cm"># the benchmark programs</span>
+  tests/      differential/  roundtrip/  directed/</pre>
+
+  <h3>Two-pass assembler</h3>
+  <p>Three passes really, because macro expansion must happen before addresses are assigned — if you expand <code>PUSH</code> into two instructions after building the symbol table, every label after it is off by four bytes per push.</p>
+  <ol>
+    <li><strong>Pass 0 · preprocess.</strong> Expand stack macros and any user macros. Emit a line map so error messages can point back at the original source.</li>
+    <li><strong>Pass 1 · symbols.</strong> Walk the expanded stream with a location counter, record <code>label → address</code>, reject duplicates. Handle <code>.text</code>/<code>.data</code> directives.</li>
+    <li><strong>Pass 2 · encode.</strong> Emit 32-bit words. Branch offsets are <code>(target − PC) &gt;&gt; 2</code> in a 27-bit signed field. The 18-bit immediate field is 2 modifier bits plus a 16-bit constant: <code>00</code> sign-extend (range −32768…32767), <code>01</code> = <code>u</code> zero-extend, <code>10</code> = <code>h</code> load to the upper half. Range-check and report the offending line, not an assertion.</li>
+  </ol>
+
+  <h4>Instruction formats to encode against</h4>
+  <div class="bfwrap">
+    <div class="bitfield">
+      <div class="bf op" style="flex:5"><span class="bf-bits">31:27</span><span class="bf-name">opcode</span></div>
+      <div class="bf" style="flex:1"><span class="bf-bits">26</span><span class="bf-name">I</span></div>
+      <div class="bf" style="flex:4"><span class="bf-bits">25:22</span><span class="bf-name">rd</span></div>
+      <div class="bf" style="flex:4"><span class="bf-bits">21:18</span><span class="bf-name">rs1</span></div>
+      <div class="bf" style="flex:4"><span class="bf-bits">17:14</span><span class="bf-name">rs2</span></div>
+      <div class="bf" style="flex:14"><span class="bf-bits">13:0</span><span class="bf-name">unused · register format</span></div>
+    </div>
+  </div>
+  <div class="bfwrap">
+    <div class="bitfield">
+      <div class="bf op" style="flex:5"><span class="bf-bits">31:27</span><span class="bf-name">opcode</span></div>
+      <div class="bf" style="flex:1"><span class="bf-bits">26</span><span class="bf-name">I</span></div>
+      <div class="bf" style="flex:4"><span class="bf-bits">25:22</span><span class="bf-name">rd</span></div>
+      <div class="bf" style="flex:4"><span class="bf-bits">21:18</span><span class="bf-name">rs1</span></div>
+      <div class="bf imm" style="flex:2"><span class="bf-bits">17:16</span><span class="bf-name">mod</span></div>
+      <div class="bf imm" style="flex:16"><span class="bf-bits">15:0</span><span class="bf-name">immediate · immediate format</span></div>
+    </div>
+  </div>
+  <div class="bfwrap">
+    <div class="bitfield">
+      <div class="bf op" style="flex:5"><span class="bf-bits">31:27</span><span class="bf-name">opcode</span></div>
+      <div class="bf imm" style="flex:27"><span class="bf-bits">26:0</span><span class="bf-name">PC-relative offset, in words · branch format</span></div>
+    </div>
+  </div>
+
+  <p>Decoding is a two-step test: if the opcode's top bit is 1 it is branch format; otherwise the <code>I</code> bit picks register or immediate. Note the deliberate irregularity in <code>st rd, imm[rs1]</code> — the <code>rd</code> field holds a <em>source</em> register, because the store reuses the immediate format rather than getting one of its own. Your decoder must special-case it and your disassembler must print it correctly.</p>
+
+  <h3>Stack macros and the safety net</h3>
+  <p>RISC201 uses a full-descending stack: <code>sp</code> points at the last item pushed, so a push decrements first.</p>
+
+  <pre><span class="kw">.macro</span> <span class="lb">PUSH</span> rX          <span class="kw">.macro</span> <span class="lb">POP</span> rX
+  sub sp, sp, 4         ld  rX, 0[sp]
+  st  rX, 0[sp]         add sp, sp, 4
+<span class="kw">.endm</span>                 <span class="kw">.endm</span></pre>
+
+  <p>Remember that each <code>PUSH</code> costs two retired instructions. If you count macros as one instruction your CPI numbers will be quietly wrong — count post-expansion.</p>
+
+  <p>Item 2f wants runtime memory protection. Check three things on every <code>sp</code> update and every memory access:</p>
+  <ul>
+    <li><strong>Alignment</strong> — <code>addr &amp; 3 == 0</code>, else <code>MisalignedAccess</code>.</li>
+    <li><strong>Bounds</strong> — <code>STACK_LIMIT ≤ addr ≤ STACK_BASE</code> for sp-relative accesses.</li>
+    <li><strong>Guard band</strong> — a red zone of a few words below <code>STACK_LIMIT</code>. Any touch is <code>StackOverflow</code>, caught one access <em>before</em> real corruption.</li>
+  </ul>
+
+  <div class="flag">
+    <p class="dh">Precise exceptions in a pipeline</p>
+    <p>When an instruction faults in stage 3 of a 4-stage core, two later instructions are already in flight and one earlier instruction has not retired. Raising the exception immediately corrupts architectural state. The fix: carry a fault code in the pipeline registers alongside the instruction, and only <em>take</em> the exception when that instruction reaches writeback — at which point everything older has retired and everything younger gets squashed. Graders ask about this.</p>
+  </div>
+
+  <h3>ASCII stack visualizer</h3>
+  <p>Maintain a shadow frame stack: push a record on <code>call</code> (callee label, <code>sp</code> at entry, return address), pop on <code>ret</code>. That is what lets you draw frame boundaries rather than an undifferentiated column of words.</p>
+
+  <pre>          address      word         annotation
+        +--------------------------------------------+
+ 0x0FF0 | 0x0000000A | r0 (saved)                    |  &lt;-- sp
+        | 0x00001040 | ra (saved)                    |
+ 0x0FF8 +--------------------------------------------+  factorial   depth 3
+        | 0x0000000B | r0 (saved)                    |
+        | 0x00001040 | ra (saved)                    |
+ 0x1000 +--------------------------------------------+  factorial   depth 2
+        | 0x00000000 | (unused)                      |
+        +--------------------------------------------+  &lt;-- STACK_BASE
+  guard   ############ 0x0FE0 .. 0x0FEF ############
+          free: 16 B    used: 24 B    high-water: 32 B</pre>
+
+  <h3>CLI debugger</h3>
+  <div class="tw">
+    <table>
+      <caption>Command set · the pipeline view is what sells the demo</caption>
+      <thead><tr><th>Command</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>load prog.s</code></td><td>Assemble and load; report errors with source lines</td></tr>
+        <tr><td><code>core 4|6|micro</code></td><td>Switch execution model — same program, same memory image</td></tr>
+        <tr><td><code>alu adder=kogge mul=booth4</code></td><td>Swap ALU implementations at runtime</td></tr>
+        <tr><td><code>step [n]</code></td><td>Advance n <em>instructions</em></td></tr>
+        <tr><td><code>cycle [n]</code></td><td>Advance n <em>clocks</em> — the distinction is the point</td></tr>
+        <tr><td><code>pipe</code></td><td>Render stage occupancy with stall and flush reasons</td></tr>
+        <tr><td><code>ucode</code></td><td>μPC, current microinstruction fields, dispatch target</td></tr>
+        <tr><td><code>break &lt;addr|label&gt;</code> · <code>watch &lt;reg|addr&gt;</code></td><td>Breakpoints and watchpoints</td></tr>
+        <tr><td><code>stack</code></td><td>The frame renderer above</td></tr>
+        <tr><td><code>stats</code></td><td>IC, cycles, CPI, stall breakdown by cause, T_clk, FO4/inst</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <pre>cycle 47 | core=pipe6-G
+  IF  [0x1024] add  r3, r1, r4
+  OF  [0x1020] ld   r1, 0[r2]     &lt;-- stalled: RAW on r1 from MA2
+  EX  [----- ] bubble
+  MA1 [0x101C] st   r5, 4[sp]
+  MA2 [0x1018] mul  r7, r7, r8
+  RW  [0x1014] cmp  r1, 0
+  stalls: load-use 12  control 7  muldiv 24     CPI(run) 1.47</pre>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">05</span><h2>Evaluation and reproducibility</h2></div>
+
+  <p class="lede">You asked about reproducibility specifically. Here is the protocol that makes item 5 defensible — and that lets you regenerate every number in your report after a late bug fix without redoing the analysis by hand.</p>
+
+  <h3>Differential testing against a golden model</h3>
+  <p>Write <code>core/functional.py</code> first: a plain single-cycle interpreter with no pipeline, no forwarding, no microcode. It is obviously correct because there is nothing in it to get wrong. Then assert that every other core reaches <strong>identical architectural state</strong> — all 16 registers, flags, memory, retired instruction count — at every retirement boundary.</p>
+  <p>Feed it a constrained random program generator: valid encodings only, bounded loop counts, memory accesses confined to a mapped region, no wild jumps. A few thousand random programs will find your forwarding bugs in minutes; hand-written tests will not.</p>
+
+  <h3>Benchmarks chosen to stress different hazards</h3>
+  <div class="tw">
+    <table>
+      <caption>Pick programs whose hazard mixes actually differ — otherwise every core ranks the same</caption>
+      <thead><tr><th>Program</th><th>Primary stress</th><th>Expected to favour</th></tr></thead>
+      <tbody>
+        <tr><td>Recursive factorial</td><td><code>call</code>/<code>ret</code>, stack traffic, load-use</td><td class="c-pet">shallow (4A)</td></tr>
+        <tr><td>Primality test</td><td>Branch density + <code>mod</code> latency</td><td class="c-pet">shallow (4A)</td></tr>
+        <tr><td>Bubble sort, n = 32</td><td>Load/store density, load-use chains</td><td class="c-amb">split-MA (6G)</td></tr>
+        <tr><td>Matrix multiply, 8×8</td><td><code>mul</code> latency, loop-carried dependences</td><td class="c-amb">split-EX (6F)</td></tr>
+        <tr><td>Binary GCD</td><td>Branches and shifts, no memory</td><td class="c-dim">near-neutral</td></tr>
+        <tr><td>String reverse in place</td><td>Load/store pairs, stack frames</td><td class="c-amb">split-MA (6G)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>If every benchmark ranks the cores the same way, your benchmark set is too narrow — go find a program that inverts the order. A comparison where the answer changes with the workload is a much stronger result than one where it does not, and it is the honest one.</p>
+
+  <h3>The reproducibility checklist</h3>
+  <ul>
+    <li><strong>Delay model in a config file</strong>, not scattered through the source. <code>config/delays.yaml</code> holds every FO4 figure in §01, with a comment on where each came from. Every reported number is a function of that file.</li>
+    <li><strong>Pinned seeds</strong> for the random program generator, committed alongside the failures they found.</li>
+    <li><strong>One command regenerates everything.</strong> <code>make repro</code> runs the benchmark matrix, writes a CSV per configuration, and renders every table and figure in your report from those CSVs. No number is ever typed by hand.</li>
+    <li><strong>Committed golden traces</strong> so a regression shows up as a diff rather than as a changed summary statistic.</li>
+    <li><strong>Version the ISA table</strong> and record its hash in every results file. When the opcode map is corrected, you will know instantly which results predate the fix.</li>
+    <li><strong>Sweep, don't assert.</strong> The memory-latency sweep in §01 is one parameter; branch frequency and load-use frequency deserve the same treatment. Report where the crossovers are, not a single point estimate.</li>
+  </ul>
+
+  <h3>Statistics to emit per run</h3>
+  <pre>instructions retired          cycles                CPI
+stall cycles: load-use / control / structural / muldiv
+branches: total / taken / flush cycles
+microinstructions executed    control store bits    uCPI
+critical stage + T_clk (from delays.yaml)           FO4 per instruction</pre>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">06</span><h2>Reading list</h2></div>
+  <p class="lede">Ordered by what you will need first. The four tagged <span class="reftag core">core</span> are the ones to read this week; the rest are for the report and for defending it.</p>
+
+  <div class="refs">
+    <div class="ref"><div class="rn">01</div><div>
+      <p class="rt">Basic Computer Architecture <span class="reftag core">core</span></p>
+      <p class="rw">Smruti R. Sarangi · free PDF · <a href="https://srsarangi.github.io/archbook/archbook.pdf">srsarangi.github.io/archbook</a></p>
+      <p class="rd">Your course's spine. Ch. 3 is the SimpleRisc ISA and encoding; Ch. 8 designs the processor; Ch. 9 the pipeline and its hazards; Ch. 10 the microprogrammed design. The chapter PDFs are also individually linked from the book's site. Start with ch. 3 §3.3.14 (encoding) — it is what your assembler must implement.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">02</div><div>
+      <p class="rt">Computer Architecture: A Quantitative Approach <span class="reftag core">core</span></p>
+      <p class="rw">Hennessy &amp; Patterson · Appendix C, Chapter 3</p>
+      <p class="rd">Appendix C is the canonical treatment of pipeline hazards, forwarding and the CPI equation. Chapter 3 covers branch prediction if you decide to add it. The companion volume, <em>Computer Organization and Design</em> Ch. 4, builds the 5-stage datapath step by step and is the better first read if the appendix feels dense.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">03</div><div>
+      <p class="rt">Wildcat: Educational RISC-V Microprocessors <span class="reftag core">core</span></p>
+      <p class="rw">Martin Schoeberl · arXiv:2502.20197 · 2025 · <a href="https://arxiv.org/abs/2502.20197">arxiv.org/abs/2502.20197</a></p>
+      <p class="rd">The most directly relevant paper you will find. Measures 3-, 4- and 5-stage RISC-V cores on FPGA and in a SkyWater130 ASIC flow, and finds — against the textbook — that four and five stages were <em>slower</em> than three, because the execute-stage forwarding multiplexer widens with depth and sits on the critical path. Cite this when you explain why your 4-stage core is competitive.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">04</div><div>
+      <p class="rt">The Optimum Pipeline Depth for a Microprocessor <span class="reftag core">core</span></p>
+      <p class="rw">Hartstein &amp; Puzak · ISCA 2002 · <a href="https://dl.acm.org/doi/10.1145/545214.545217">dl.acm.org/doi/10.1145/545214.545217</a></p>
+      <p class="rd">The analytical theory behind the U-curve your sweep will produce. Shows that greater instruction-level parallelism <em>shortens</em> the optimal pipeline, while fewer stalls lengthen it. Their follow-up (<a href="https://dl.acm.org/doi/10.1145/1044823.1044824">TACO 2004</a>) adds power: optimising for BIPS³/W puts the optimum at about <strong>seven stages</strong> — a directly quotable anchor for a 4-vs-6 argument.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">05</div><div>
+      <p class="rt">Increasing Processor Performance by Implementing Deeper Pipelines</p>
+      <p class="rw">Sprangle &amp; Carmean, Intel · ISCA 2002 · <a href="https://ctho.org/toread/forclass/18-741/3/DeepPipeline_Carmean.pdf">free PDF</a></p>
+      <p class="rd">The opposing case, from the Pentium 4 team: deeper pipelines kept paying off, and branch misprediction latency was the single largest contributor to the degradation. Read it alongside Hartstein &amp; Puzak — the disagreement between two ISCA 2002 papers is itself a good paragraph in your report.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">06</div><div>
+      <p class="rt">The Optimal Logic Depth Per Pipeline Stage is 6 to 8 FO4 Inverter Delays</p>
+      <p class="rw">Hrishikesh, Farkas, Jouppi, Burger, Keckler, Shivakumar · ISCA 2002</p>
+      <p class="rd">Where the FO4 methodology in §01 comes from, and the sanity check on your delay budget. Pair with Agarwal, Hrishikesh, Keckler &amp; Burger, "Clock Rate versus IPC" (ISCA 2000) for the wire-delay side of the argument.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">07</div><div>
+      <p class="rt">RV-IM100: Quantifying ISA Extension, Datapath Width and Pipeline Depth Trade-offs</p>
+      <p class="rw">Hyunwoo Kang · arXiv:2605.01902 · 2026 · <a href="https://arxiv.org/abs/2605.01902">arxiv.org/abs/2605.01902</a></p>
+      <p class="rd">Ten FPGA cores from one 5-stage baseline, sweeping depth 5→8. Frequency rose 43→126 MHz, but throughput was <strong>non-monotonic</strong> — the 6→7 transition regressed absolute throughput despite the higher clock. The closest published analogue of the experiment you are being asked to run, and evidence that a non-monotonic result is a real finding rather than a bug in your simulator.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">08</div><div>
+      <p class="rt">Microprogramming History</p>
+      <p class="rw">Mark Smotherman, Clemson · <a href="https://people.computing.clemson.edu/~mark/uprog.html">people.computing.clemson.edu/~mark/uprog.html</a></p>
+      <p class="rd">The clearest short treatment of horizontal vs vertical encoding and of nanoprogramming, with the real machines that used each — the Nanodata QM-1 (16K×18-bit micro-store over a 1K×360-bit nano-store) and the Motorola 68000. Also makes the point that horizontal microprogramming resembles VLIW scheduling, which is a good framing for your comparison. Wilkes' 1951 paper is the origin if you want to cite it.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">09</div><div>
+      <p class="rt">Computer Arithmetic: Algorithms and Hardware Designs</p>
+      <p class="rw">Behrooz Parhami · and Israel Koren, <em>Computer Arithmetic Algorithms</em></p>
+      <p class="rd">Either one covers everything in §01c properly: prefix adder taxonomies, Booth recoding, Wallace and Dadda trees, restoring/non-restoring/SRT division. For the adder table specifically, Harris's "A Taxonomy of Parallel Prefix Networks" (Asilomar 2003) is the canonical framework, with Kogge &amp; Stone (1973) and Brent &amp; Kung (1982) as the primary sources.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">10</div><div>
+      <p class="rt">Ripes</p>
+      <p class="rw">Morten Petersen · <a href="https://github.com/mortbopet/Ripes">github.com/mortbopet/Ripes</a> · runs in-browser at <a href="https://ripes.dk/">ripes.dk</a></p>
+      <p class="rd">Spend an hour driving it before you design your CLI. It is the most-used teaching simulator for RISC-V and its pipeline view, stage annotations and stall/flush indicators are exactly the UX your <code>pipe</code> command should aim at. <a href="https://arxiv.org/pdf/2504.03722">WebRISC-V</a> is worth a look too for its cycle-by-cycle table layout.</p>
+    </div></div>
+
+    <div class="ref"><div class="rn">11</div><div>
+      <p class="rt">Pedagogically Motivated and Composable Open-Source RISC-V Processors</p>
+      <p class="rw">McDougall et al. · arXiv:2509.20514 · 2025 · <a href="https://arxiv.org/abs/2509.20514">arxiv.org/abs/2509.20514</a></p>
+      <p class="rd">Surveys open RISC-V implementations against criteria for teaching use, then presents a full stack: single-cycle, pipelined and cached reference cores, skeleton versions, verification infrastructure and test generators. Read their verification section — it is a template for the differential-testing protocol in §05. See also <a href="https://arxiv.org/pdf/2510.15887">basic_RV32s</a> (arXiv:2510.15887) for a documented single-cycle → 5-stage progression.</p>
+    </div></div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">07</span><h2>Ten days to the first evaluation</h2></div>
+  <p class="lede">Eval 1 is 30 September. Four or five people, parallelisable if you agree the interfaces on day one. The ordering below front-loads the things everything else depends on.</p>
+
+  <div class="plan">
+    <div class="pd">
+      <p class="pday">Days 1–2 · together</p>
+      <ul>
+        <li>Confirm the RISC201 opcode map against the handout</li>
+        <li>Write <code>isa/table.py</code> and <code>encoding.py</code> — everyone blocks on this</li>
+        <li>Agree the core interface: <code>step()</code>, <code>state()</code>, <code>stats()</code></li>
+        <li>Ask about the microcode/pipeline question in §01b</li>
+      </ul>
+    </div>
+    <div class="pd">
+      <p class="pday">Days 3–5 · split</p>
+      <ul>
+        <li><strong>A:</strong> assembler passes 0–2 + disassembler + round-trip tests</li>
+        <li><strong>B:</strong> golden functional core + memory + exceptions</li>
+        <li><strong>C:</strong> ALU classes, adders first, with directed flag tests</li>
+        <li><strong>D:</strong> CLI skeleton, <code>load</code>/<code>step</code>/<code>info</code>/<code>x</code></li>
+      </ul>
+    </div>
+    <div class="pd">
+      <p class="pday">Days 6–8 · the pipelines</p>
+      <ul>
+        <li>4-stage core, then 6-stage as a parameterised variant</li>
+        <li>Differential test both against the golden core</li>
+        <li><code>delays.yaml</code> and the <code>stats</code> command</li>
+        <li>Stack macros, guard band, ASCII renderer</li>
+      </ul>
+    </div>
+    <div class="pd">
+      <p class="pday">Days 9–10 · the result</p>
+      <ul>
+        <li>Benchmarks written and running on both cores</li>
+        <li>The memory-latency sweep and its figure</li>
+        <li><code>make repro</code> end to end</li>
+        <li>Rehearse the demo: <code>pipe</code> and <code>stack</code> are what gets watched</li>
+      </ul>
+    </div>
+  </div>
+
+  <p>Microcode (items 1b and 3) can trail into the window before the November evaluation — but settle the design question in §01b now, because the answer decides whether it is a third core or a change to an existing one, and that is a week of difference.</p>
+</section>
+
+<footer>
+  <p>Numbers in §01 come from the delay budget stated there, not from measurement — they are a worked example of the method, and your own figures will differ once you set <code>delays.yaml</code>. The value is in stating the assumptions and sweeping the uncertain parameter, which is what makes the 4-vs-6 comparison an argument rather than a table.</p>
+</footer>
+
+</div>
+
+</body></html>
