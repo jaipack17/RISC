@@ -20,3 +20,5 @@ dist/
 *.o
 *.out
 *.log
+
+CLAUDE.md
