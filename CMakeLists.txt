@@ -18,3 +18,9 @@ endif()
 
 add_library(risc_isa INTERFACE)
 target_include_directories(risc_isa INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+add_library(risc_visualizer STATIC src/visualizer/visualizer.cpp)
+target_link_libraries(risc_visualizer PUBLIC risc_isa)
+
+add_executable(risc_run src/main.cpp)
+target_link_libraries(risc_run PRIVATE risc_visualizer)

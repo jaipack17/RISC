@@ -15,12 +15,17 @@ public:
         pc = machine::RESET_PC;
     }
 
+    // The pc register as it is, without the checks in fetch_address()
+    isa::Word current_pc() const {
+        return pc;
+    }
+
     // The address sent to instruction memory (throws if pc is not a valid instruction address)
     isa::Word fetch_address() const {
         if (pc % isa::WORD_BYTES != 0) {
             throw CpuException{isa::Exception::MisalignedFetch, pc};
         }
-        if (pc < machine::TEXT_BASE || pc >= machine::TEXT_END) {
+        if (pc < machine::INSTRUCTION_BASE || pc >= machine::INSTRUCTION_END) {
             throw CpuException{isa::Exception::ExecuteOutsideText, pc};
         }
         return pc;

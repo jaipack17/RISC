@@ -51,11 +51,18 @@ public:
         return value;
     }
 
+    // Used by a running program (st): TEXT is read-only
     void write_word(isa::Word address, isa::Word value) {
         check_word_access(address);
-        if (address >= machine::TEXT_BASE && address < machine::TEXT_END) {
+        if (address >= machine::INSTRUCTION_BASE && address < machine::INSTRUCTION_END) {
             throw CpuException{isa::Exception::WriteToText, address};
         }
+        load_word(address, value);
+    }
+
+    // Used by the loader before the program runs: may write into TEXT
+    void load_word(isa::Word address, isa::Word value) {
+        check_word_access(address);
 
         for (unsigned i = 0; i < isa::WORD_BYTES; i++) {
             bytes[address + i] = std::uint8_t(value >> byte_shift(i));

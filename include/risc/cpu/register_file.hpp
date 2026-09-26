@@ -52,5 +52,10 @@ public:
             regs[write_port.address] = write_port.data;
         }
     }
+
+    // For debugger and visualizer
+    isa::Word value(unsigned index) const {
+        return regs[index];
+    }
 };
 }

@@ -49,14 +49,14 @@ private:
         }
 
         bool has_i_bit = info->operands != isa::Operands::Label && info->operands != isa::Operands::None;
-        Word mod = bits(inst, isa::MOD_POS, isa::MOD_BITS);
+        Word modifier = bits(inst, isa::MOD_POS, isa::MOD_BITS);
 
-        if (has_i_bit && i_bit(inst) && mod == 0b11) {
+        if (has_i_bit && i_bit(inst) && modifier == 0b11) {
             throw CpuException{isa::Exception::IllegalInstruction, pc};
         }
 
         if (info->operands == isa::Operands::RdMem) {
-            if (!i_bit(inst) || mod != Word(isa::Modifier::Default)) {
+            if (!i_bit(inst) || modifier != Word(isa::Modifier::Default)) {
                 throw CpuException{isa::Exception::IllegalInstruction, pc};
             }
         }
@@ -65,21 +65,27 @@ private:
     // calculate immediate
     static Word calculate_immediate(Word inst) {
         Word imm = bits(inst, isa::IMM_POS, isa::IMM_BITS);
-        Word mod = bits(inst, isa::MOD_POS, isa::MOD_BITS);
+        Word modifier = bits(inst, isa::MOD_POS, isa::MOD_BITS);
+        Word immx = imm;
 
-        if (mod == Word(isa::Modifier::Unsigned)) {
-            return imm;
+        if (modifier == Word(isa::Modifier::Unsigned)) {
+            immx = imm;
         }
-        if (mod == Word(isa::Modifier::High)) {
-            return imm << isa::IMM_BITS;
+        if (modifier == Word(isa::Modifier::High)) {
+            immx = imm << isa::IMM_BITS;
         }
-        return sign_extend(imm, isa::IMM_BITS);
+        if (modifier == Word(isa::Modifier::Default)) {
+            immx = sign_extend(imm, isa::IMM_BITS);
+        }
+        return immx;
     }
 
     // shift by 2 bits and extend sign, then add pc
     static Word calculate_branch_target(Word pc, Word inst) {
         Word offset = sign_extend(bits(inst, isa::OFFSET_POS, isa::OFFSET_BITS), isa::OFFSET_BITS);
-        return pc + (offset << 2);
+        Word branchTarget = pc + (offset << 2);
+
+        return branchTarget;
     }
 
 public:
@@ -91,6 +97,8 @@ public:
     static bool i_bit(Word inst) {
         return bits(inst, isa::I_POS, 1) == 1;
     }
+
+    // Word = uint32_t
 
     OperandFetchOutput run(Word pc, Word inst, const ControlSignals& ctrl, RegisterFile& rf) const {
         check_legal(pc, inst);
