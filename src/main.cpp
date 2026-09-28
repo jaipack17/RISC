@@ -1,9 +1,13 @@
 #include <chrono>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
+#include <string>
 #include <thread>
 #include <vector>
 
+#include "risc/assembler/assembler.hpp"
 #include "risc/cpu/cpu.hpp"
 #include "risc/isa/isa_config.hpp"
 #include "risc/isa/machine_config.hpp"
@@ -36,18 +40,59 @@ const std::vector<isa::Word> PROGRAM = {
     0xF0000000, // 0x4C sum_done:  ret                 ; back to 0x24
 };
 
-// Usage: risc_run [clock period in ms]   (default 500 ms per cycle)
+namespace {
+
+bool is_assembly_path(const char* argument) {
+    std::string path(argument);
+    if (path.size() < 4) {
+        return false;
+    }
+    std::string suffix = path.substr(path.size() - 4);
+    for (char& ch : suffix) {
+        ch = char(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return suffix == ".asm";
+}
+
+} // namespace
+
+// Usage:
+//   risc_run [clock period in ms]               runs the built-in demo program
+//   risc_run <program.asm> [clock period in ms] assembles and runs user source
 int main(int argc, char* argv[]) {
     int clock_period_ms = 500;
-    if (argc > 1) {
-        clock_period_ms = std::atoi(argv[1]);
+    std::vector<isa::Word> program = PROGRAM;
+
+    int clock_argument = 1;
+    if (argc > 1 && is_assembly_path(argv[1])) {
+        try {
+            assembler::Assembler risc_assembler;
+            program = risc_assembler.assemble_file(argv[1]);
+        } catch (const std::exception& error) {
+            std::cerr << "Assembler error: " << error.what() << '\n';
+            return 1;
+        }
+        clock_argument = 2;
+    }
+    if (argc > clock_argument) {
+        clock_period_ms = std::atoi(argv[clock_argument]);
+    }
+    if (argc > clock_argument + 1) {
+        std::cerr << "Usage: risc_run [clock period] | risc_run <program.asm> [clock period]\n";
+        return 1;
     }
 
     memory::Memory memory;
 
     // Loader: put the program's encodings into TEXT
-    for (unsigned i = 0; i < PROGRAM.size(); i++) {
-        memory.load_word(machine::INSTRUCTION_BASE + i * isa::WORD_BYTES, PROGRAM[i]);
+    const std::size_t text_capacity =
+        (machine::INSTRUCTION_END - machine::INSTRUCTION_BASE) / isa::WORD_BYTES;
+    if (program.size() > text_capacity) {
+        std::cerr << "Loader error: program does not fit in instruction memory\n";
+        return 1;
+    }
+    for (unsigned i = 0; i < program.size(); i++) {
+        memory.load_word(machine::INSTRUCTION_BASE + i * isa::WORD_BYTES, program[i]);
     }
 
     cpu::CPU cpu(memory);
