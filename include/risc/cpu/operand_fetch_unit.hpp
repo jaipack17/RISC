@@ -18,7 +18,7 @@ class OperandFetchUnit {
 private:
     using Word = isa::Word;
 
-    static Word bits(Word inst, unsigned pos, unsigned width) {
+    static Word extract_bits(Word inst, unsigned pos, unsigned width) {
         Word mask = (Word{1} << width) - 1;
         return (inst >> pos) & mask;
     }
@@ -49,7 +49,7 @@ private:
         }
 
         bool has_i_bit = info->operands != isa::Operands::Label && info->operands != isa::Operands::None;
-        Word modifier = bits(inst, isa::MOD_POS, isa::MOD_BITS);
+        Word modifier = extract_bits(inst, isa::MOD_POS, isa::MOD_BITS);
 
         if (has_i_bit && i_bit(inst) && modifier == 0b11) {
             throw CpuException{isa::Exception::IllegalInstruction, pc};
@@ -64,8 +64,8 @@ private:
 
     // calculate immediate
     static Word calculate_immediate(Word inst) {
-        Word imm = bits(inst, isa::IMM_POS, isa::IMM_BITS);
-        Word modifier = bits(inst, isa::MOD_POS, isa::MOD_BITS);
+        Word imm = extract_bits(inst, isa::IMM_POS, isa::IMM_BITS);
+        Word modifier = extract_bits(inst, isa::MOD_POS, isa::MOD_BITS);
         Word immx = imm;
 
         if (modifier == Word(isa::Modifier::Unsigned)) {
@@ -82,7 +82,7 @@ private:
 
     // shift by 2 bits and extend sign, then add pc
     static Word calculate_branch_target(Word pc, Word inst) {
-        Word offset = sign_extend(bits(inst, isa::OFFSET_POS, isa::OFFSET_BITS), isa::OFFSET_BITS);
+        Word offset = sign_extend(extract_bits(inst, isa::OFFSET_POS, isa::OFFSET_BITS), isa::OFFSET_BITS);
         Word branchTarget = pc + (offset << 2);
 
         return branchTarget;
@@ -91,11 +91,11 @@ private:
 public:
     // The two inputs of the control unit
     static isa::Opcode opcode(Word inst) {
-        return isa::Opcode(bits(inst, isa::OPCODE_POS, isa::OPCODE_BITS));
+        return isa::Opcode(extract_bits(inst, isa::OPCODE_POS, isa::OPCODE_BITS));
     }
 
     static bool i_bit(Word inst) {
-        return bits(inst, isa::I_POS, 1) == 1;
+        return extract_bits(inst, isa::I_POS, 1) == 1;
     }
 
     // Word = uint32_t
@@ -103,9 +103,9 @@ public:
     OperandFetchOutput run(Word pc, Word inst, const ControlSignals& ctrl, RegisterFile& rf) const {
         check_legal(pc, inst);
 
-        unsigned rd = bits(inst, isa::RD_POS, isa::REG_BITS);
-        unsigned rs1 = bits(inst, isa::RS1_POS, isa::REG_BITS);
-        unsigned rs2 = bits(inst, isa::RS2_POS, isa::REG_BITS);
+        unsigned rd = extract_bits(inst, isa::RD_POS, isa::REG_BITS);
+        unsigned rs1 = extract_bits(inst, isa::RS1_POS, isa::REG_BITS);
+        unsigned rs2 = extract_bits(inst, isa::RS2_POS, isa::REG_BITS);
 
         // Multiplexer in front of read port 1: ra for ret, else rs1
         if (ctrl.isRet) {
