@@ -1,82 +1,178 @@
-# CLAUDE.md
+# RISC201 Project Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Current status
 
-## Project status
+This is a C++20 RISC201 simulator with a hardwired five-unit baseline and a two-pass assembler.
 
-This repository is currently empty except for the assignment brief
-(`20260823_CSC201CoA_Assignment.pdf`). No source code, build system, or
-language choice exists yet. There are no build/lint/test commands to
-document until the implementation is started — do not invent any.
+The CPU is organized as:
 
-When implementation begins, update this file with the actual build/run/test
-commands and the real module layout once they exist.
+```text
+IF -> OF -> EX -> MA -> RW
+```
 
-## Problem formulation (from the assignment brief)
+`CPU::step()` currently executes those units sequentially for one instruction and records a `CycleTrace` for the terminal visualizer. It is not yet an overlapping, clock-accurate pipeline with pipeline registers, forwarding, hazards, or stalls. Complete and validate this hardwired baseline before implementing the assignment's 4-stage, 6-stage, microprogrammed, stack, debugger, and evaluation extensions.
 
-Course: Computer Organization & Architecture (CSC-201), Autumn 2026 — "Processor
-Design" assignment. The deliverable is a custom RISC ISA called **RISC201**
-together with a full simulation/tooling suite around it.
+## Build and run
 
-### 1. Processor design
-- A **4-stage** and a **6-stage** RISC201 ISA/pipeline implementation, with a
-  comparison of their behavior.
-- A **microprogrammed control unit** for the processor (horizontal or
-  vertical microcode model — implementer's choice; the brief asks for extra
-  credit for doing both and comparing them).
-- A dedicated **ALU** supporting efficient arithmetic and logical operations.
+The current `build/` directory uses MinGW Makefiles, so executables appear directly under `build/`.
 
-### 2. Software environment / simulation framework
-- A **two-pass assembler**: RISC201 assembly → binary or hex.
-- A **disassembler**: binary/hex word strings → reconstructed assembly.
-- An **interactive CLI** to inspect the register file and instruction
-  pipeline.
-- A **step-by-step CPU execution simulator with debugger** (interactive CLI
-  debugger).
-- A **stack preprocessor** implementing macro expansion for full-descending
-  stack operations.
-- **Stack boundary safety verification** plus a **runtime exception
-  framework** for memory protection against stack corruption.
-- An **ASCII stack memory frame visualizer** (active stack memory
-  visualizer).
+From the repository root in CMD:
 
-### 3. Microprogrammed control integration
-- Wire the microprogrammed control logic directly into the CPU simulator so
-  RISC201 executes via **control-memory microcode** rather than hardwired
-  logic.
-- Support and compare **horizontal vs. vertical** microprogrammed control.
-- The CLI simulator/debugger must expose the **microPC's step-by-step
-  state** and raise exceptions where appropriate.
+```cmd
+cmake --build build
+```
 
-### 4. ALU integration
-- An optimized `RISC201 ALU` class/module driving all arithmetic, shift, and
-  logical operations used by the simulator.
+If there is no configured build directory:
 
-### 5. Evaluation
-- Evaluate processor, control unit, and ALU across: 4-stage vs. 6-stage
-  ISA, multiple assembly test programs, horizontal vs. vertical
-  microprogrammed control (optional), and different ALU algorithms.
+```cmd
+cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+```
 
-### Architectural implications for implementation
+Run the built-in hardcoded demo:
 
-Because the deliverables above are explicitly coupled (the control unit must
-be swappable between horizontal/vertical microcode, and the pipeline must be
-swappable between 4-stage/6-stage while sharing the same ISA, assembler,
-disassembler, and ALU), the codebase should be structured from the start so
-that:
-- The **ISA definition** (instruction encoding, opcodes, register set) is a
-  single shared source of truth used by the assembler, disassembler, and
-  both pipeline variants — avoid duplicating instruction semantics per
-  pipeline depth.
-- The **ALU** is a standalone component independent of pipeline stage count,
-  reusable by both the 4-stage and 6-stage datapaths.
-- The **control unit** is pluggable: the CPU simulator should be able to
-  select horizontal-microcode, vertical-microcode (and if applicable,
-  hardwired) control without changing the ALU/ISA/pipeline-stage logic.
-- The **stack safety/exception framework** is a cross-cutting concern
-  (assembler-time macro expansion + runtime bounds checking) rather than
-  something bolted onto one specific pipeline variant.
-- The CLI simulator/debugger is the integration point that ties
-  register-file state, pipeline stage state, microPC state, and the stack
-  visualizer together — expect this to be the most stateful, highest-fan-in
-  module.
+```cmd
+build\risc_run.exe 100
+```
+
+Run an assembly source file through the assembler and CPU:
+
+```cmd
+build\risc_run.exe programs\sum.asm 100
+```
+
+The final number is the visualizer delay in milliseconds per simulated CPU step. Use `0` for no intentional delay.
+
+Create a standalone hexadecimal text image:
+
+```cmd
+build\risc_asm.exe programs\sum.asm programs\sum.hex
+```
+
+## Current architecture
+
+### ISA
+
+`include/risc/isa/isa_config.hpp` is the shared ISA source of truth.
+
+- 32-bit fixed-width instructions and 32-bit words.
+- 16 general-purpose registers: `r0` through `r15`.
+- `r14` is `sp`; `r15` is `ra`.
+- 25 currently defined arithmetic, logical, shift, memory, control-flow, and system instructions.
+- Register, immediate, and PC-relative branch formats.
+- Default signed, `u` unsigned, and `h` upper-half immediate modifiers.
+
+### Memory, CPU, and visualizer
+
+`include/risc/isa/machine_config.hpp` defines 64 KB little-endian memory:
+
+```text
+0x0000-0x3FFF  TEXT/instruction memory
+0x4000-0xBFFF  data memory
+0xC000-0xFFFF  stack memory
+```
+
+Memory enforces word alignment and bounds, prevents runtime stores to TEXT, and permits the loader to write TEXT before execution. The CPU has a hardwired control unit, ALU, register file, instruction fetch, operand fetch, execute, memory access, and register writeback units. The terminal visualizer displays instruction flow, control signals, registers, flags, memory, and exceptions after each CPU step.
+
+## Assembler
+
+### Role and integration
+
+The assembler translates human-written RISC201 source into the same 32-bit `isa::Word` values that the CPU fetches from instruction memory.
+
+```text
+program.asm -> Assembler -> vector<isa::Word> -> memory.load_word() -> CPU
+```
+
+The assembler runs before the CPU starts. It is not one of IF/OF/EX/MA/RW.
+
+Source layout:
+
+```text
+include/risc/assembler/assembler.hpp  Public Assembler and AssemblerError API
+src/assembler/assembler.cpp           Parser, two passes, encoders, hex writer
+src/assembler_main.cpp                risc_asm command-line executable
+programs/sum.asm                      Assembly version of the original demo
+```
+
+`risc_run` has two input paths:
+
+```text
+build\risc_run.exe 100
+    -> uses the legacy hardcoded PROGRAM vector in src/main.cpp
+
+build\risc_run.exe programs\sum.asm 100
+    -> assembles source in memory
+    -> receives vector<isa::Word>
+    -> checks TEXT capacity
+    -> loads words with memory.load_word()
+    -> executes them in the CPU
+```
+
+`risc_asm` writes a `.hex` text file containing one eight-digit word per line. `risc_run` does not yet load `.hex` files; direct `.asm` execution assembles in memory and does not need a temporary hex file.
+
+### Supported source syntax
+
+- `;` starts a comment.
+- Labels use a trailing colon, for example `loop:`.
+- Registers are `r0` through `r15`, plus aliases `sp` and `ra`.
+- Decimal and `0x`-prefixed hexadecimal immediates are accepted.
+- Labels are case-insensitive and use letters/underscores first, followed by letters, digits, or underscores.
+- The assembler uses the operand shapes from `isa_config.hpp`, including:
+
+```asm
+add rd, rs1, rs2_or_immediate
+cmp rs1, rs2_or_immediate
+mov rd, rs2_or_immediate
+ld  rd, offset[rs1]
+st  rs, offset[rs1]
+beq label
+bgt label
+bc  label
+bv  label
+b   label
+call label
+ret
+nop
+hlt
+```
+
+### Assembly stages
+
+1. Read a `.asm` file.
+2. Preprocess comments, blank lines, and surrounding whitespace while preserving line numbers.
+3. Tokenize words, commas, brackets, and colons.
+4. Parse instruction shapes using shared ISA operand metadata.
+5. Parse and validate registers.
+6. Parse decimal/hex immediate values.
+7. Pass 1: build `label -> address` mappings with a location counter.
+8. Encode opcode, I bit, register, modifier, and immediate fields.
+9. Encode branches with signed PC-relative offsets: `(target - current_pc) / 4`.
+10. Optionally write hexadecimal output.
+11. Load direct-execution output into TEXT memory beginning at `0x0000`.
+12. Report file, line, and descriptive errors for malformed source or I/O failures.
+
+Errors include missing files, unknown instructions, malformed operands, invalid registers, invalid/out-of-range immediates, invalid or duplicate labels, undefined labels, branch-range failures, output failures, and programs larger than TEXT memory.
+
+## CMake targets
+
+```text
+risc_isa          Interface library exposing include/
+risc_visualizer   Terminal visualizer static library
+risc_assembler    Assembler static library
+risc_run          Simulator executable; links visualizer and assembler
+risc_asm          Standalone assembler executable
+```
+
+## Planned next work
+
+1. Add directed tests for the hardwired baseline and assembler edge cases.
+2. Implement a disassembler using the same ISA table and add round-trip tests.
+3. Add a `.hex` file loader if standalone generated images should execute directly.
+4. Complete hardwired-baseline validation and documentation.
+5. Implement and compare the 4-stage and 6-stage overlapping pipeline models.
+6. Add microprogrammed control, stack preprocessing/safety/visualization, interactive debugger capabilities, and evaluation tooling.
+
+## Assignment scope
+
+`20260823_CSC201CoA_Assignment.pdf` requires the wider RISC201 environment: two-pass assembly/disassembly, step-by-step simulation, stack support and safety, microprogrammed control, 4-stage/6-stage comparison, an optimized ALU, and evaluation. The current implementation is the hardwired five-unit baseline plus its assembler foundation.
