@@ -32,6 +32,13 @@ private:
         return 8 * (isa::WORD_BYTES - 1 - i);
     }
 
+    // Store the 4 bytes of a word, in the configured byte order
+    void store_bytes(isa::Word address, isa::Word value) {
+        for (unsigned i = 0; i < isa::WORD_BYTES; i++) {
+            bytes[address + i] = std::uint8_t(value >> byte_shift(i));
+        }
+    }
+
 public:
     Memory() {
         reset();
@@ -57,16 +64,16 @@ public:
         if (address >= machine::INSTRUCTION_BASE && address < machine::INSTRUCTION_END) {
             throw CpuException{isa::Exception::WriteToText, address};
         }
-        load_word(address, value);
+        store_bytes(address, value);
     }
 
-    // Used by the loader before the program runs: may write into TEXT
-    void load_word(isa::Word address, isa::Word value) {
+    // Used by the loader before the program runs: puts an instruction into the instruction region
+    void write_instruction_word(isa::Word address, isa::Word value) {
         check_word_access(address);
-
-        for (unsigned i = 0; i < isa::WORD_BYTES; i++) {
-            bytes[address + i] = std::uint8_t(value >> byte_shift(i));
+        if (address < machine::INSTRUCTION_BASE || address >= machine::INSTRUCTION_END) {
+            throw CpuException{isa::Exception::OutOfBoundsAccess, address};
         }
+        store_bytes(address, value);
     }
 };
 }

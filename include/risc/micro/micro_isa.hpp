@@ -2,9 +2,9 @@
 
 #include <cstdint>
 
-#include "risc/micro/alu.hpp"
-#include "risc/micro/memory_unit.hpp"
-#include "risc/micro/register_file.hpp"
+#include "risc/micro/datapath/alu.hpp"
+#include "risc/micro/datapath/memory_unit.hpp"
+#include "risc/micro/datapath/register_file.hpp"
 
 namespace risc::micro {
 

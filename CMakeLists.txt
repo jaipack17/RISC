@@ -24,3 +24,6 @@ target_link_libraries(risc_visualizer PUBLIC risc_isa)
 
 add_executable(risc_run src/main.cpp)
 target_link_libraries(risc_run PRIVATE risc_visualizer)
+
+add_executable(risc_micro_run src/micro_main.cpp)
+target_link_libraries(risc_micro_run PRIVATE risc_isa)

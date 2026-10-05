@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
 
     // Loader: put the program's encodings into TEXT
     for (unsigned i = 0; i < PROGRAM.size(); i++) {
-        memory.load_word(machine::INSTRUCTION_BASE + i * isa::WORD_BYTES, PROGRAM[i]);
+        memory.write_instruction_word(machine::INSTRUCTION_BASE + i * isa::WORD_BYTES, PROGRAM[i]);
     }
 
     cpu::CPU cpu(memory);
