@@ -1,0 +1,272 @@
+@ RISC201 microcode, vertical microprogramming
+
+@ Preamble
+.begin:
+    mloadIR
+    mdecode
+    madd    pc, 4
+    mswitch
+
+@ add rd, rs1, rs2/imm
+.add:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .add_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <add>
+    mb      .add_rw
+.add_imm:
+    mmov    B, immx, <add>
+.add_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ sub rd, rs1, rs2/imm
+.sub:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .sub_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <sub>
+    mb      .sub_rw
+.sub_imm:
+    mmov    B, immx, <sub>
+.sub_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ mul rd, rs1, rs2/imm
+.mul:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .mul_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <mul>
+    mb      .mul_rw
+.mul_imm:
+    mmov    B, immx, <mul>
+.mul_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ div rd, rs1, rs2/imm
+.div:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .div_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <div>
+    mb      .div_rw
+.div_imm:
+    mmov    B, immx, <div>
+.div_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ mod rd, rs1, rs2/imm
+.mod:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .mod_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <mod>
+    mb      .mod_rw
+.mod_imm:
+    mmov    B, immx, <mod>
+.mod_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ and rd, rs1, rs2/imm
+.and:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .and_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <and>
+    mb      .and_rw
+.and_imm:
+    mmov    B, immx, <and>
+.and_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ or rd, rs1, rs2/imm
+.or:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .or_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <or>
+    mb      .or_rw
+.or_imm:
+    mmov    B, immx, <or>
+.or_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ xor rd, rs1, rs2/imm
+.xor:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .xor_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <xor>
+    mb      .xor_rw
+.xor_imm:
+    mmov    B, immx, <xor>
+.xor_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ lsl rd, rs1, rs2/imm
+.lsl:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .lsl_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <lsl>
+    mb      .lsl_rw
+.lsl_imm:
+    mmov    B, immx, <lsl>
+.lsl_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ lsr rd, rs1, rs2/imm
+.lsr:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .lsr_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <lsr>
+    mb      .lsr_rw
+.lsr_imm:
+    mmov    B, immx, <lsr>
+.lsr_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ asr rd, rs1, rs2/imm
+.asr:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .asr_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <asr>
+    mb      .asr_rw
+.asr_imm:
+    mmov    B, immx, <asr>
+.asr_rw:
+    mmov    regSrc, rd
+    mmov    regData, aluResult, <write>
+    mb      .begin
+
+@ mov rd, rs2/imm
+.mov:
+    mbeq    I, 1, .mov_imm
+    mmov    regSrc, rs2, <read>
+    mmov    regData, regVal
+    mb      .mov_rw
+.mov_imm:
+    mmov    regData, immx
+.mov_rw:
+    mmov    regSrc, rd, <write>
+    mb      .begin
+
+@ not rd, rs2/imm
+.not:
+    mbeq    I, 1, .not_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <not>
+    mb      .not_rw
+.not_imm:
+    mmov    B, immx, <not>
+.not_rw:
+    mmov    regData, aluResult
+    mmov    regSrc, rd, <write>
+    mb      .begin
+
+@ cmp rs1, rs2/imm
+.cmp:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mbeq    I, 1, .cmp_imm
+    mmov    regSrc, rs2, <read>
+    mmov    B, regVal, <cmp>
+    mb      .begin
+.cmp_imm:
+    mmov    B, immx, <cmp>
+    mb      .begin
+
+@ nop
+.nop:
+    mb      .begin
+
+@ ld rd, imm[rs1]
+.ld:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mmov    B, immx, <add>
+    mmov    mar, aluResult, <load>
+    mmov    regData, ldResult
+    mmov    regSrc, rd, <write>
+    mb      .begin
+
+@ st rd, imm[rs1]
+.st:
+    mmov    regSrc, rs1, <read>
+    mmov    A, regVal
+    mmov    B, immx, <add>
+    mmov    mar, aluResult
+    mmov    regSrc, rd, <read>
+    mmov    mdr, regVal, <store>
+    mb      .begin
+
+@ b label
+.b:
+    mmov    pc, branchTarget
+    mb      .begin
+
+@ beq label
+.beq:
+    mbeq    flagE, 1, .beq_branch
+    mb      .begin
+.beq_branch:
+    mmov    pc, branchTarget
+    mb      .begin
+
+@ bgt label
+.bgt:
+    mbeq    flagGT, 1, .bgt_branch
+    mb      .begin
+.bgt_branch:
+    mmov    pc, branchTarget
+    mb      .begin
+
+@ call label (pc already points to the next instruction)
+.call:
+    mmov    regData, pc
+    mmovi   regSrc, 15, <write>
+    mmov    pc, branchTarget
+    mb      .begin
+
+@ ret
+.ret:
+    mmovi   regSrc, 15, <read>
+    mmov    pc, regVal
+    mb      .begin
+
+@ halt instruction
+.hlt:
+    madd    pc, -4, <halt>

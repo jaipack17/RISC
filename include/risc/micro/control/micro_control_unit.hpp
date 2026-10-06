@@ -60,9 +60,16 @@ public:
     }
 
     // Store microcode in the microprogram memory, starting at address 0
-    void load(const std::vector<Microinstruction>& microcode) {
+    void write_microinstructions(const std::vector<Microinstruction>& microcode) {
         for (unsigned i = 0; i < microcode.size(); i++) {
             microprogram[i] = encode(microcode[i]);
+        }
+    }
+
+    // Store already-encoded microinstructions (e.g. from the microassembler), starting at address 0
+    void write_microprogram_words(const std::vector<MicroWord>& words) {
+        for (unsigned i = 0; i < words.size(); i++) {
+            microprogram[i] = words[i];
         }
     }
 

@@ -22,8 +22,20 @@ target_include_directories(risc_isa INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/includ
 add_library(risc_visualizer STATIC src/visualizer/visualizer.cpp)
 target_link_libraries(risc_visualizer PUBLIC risc_isa)
 
+add_library(risc_assembler STATIC src/assembler/assembler.cpp)
+target_link_libraries(risc_assembler PUBLIC risc_isa)
+
+add_executable(risc_asm src/assembler_main.cpp)
+target_link_libraries(risc_asm PRIVATE risc_assembler)
+
+add_library(risc_microassembler STATIC src/microassembler/microassembler.cpp)
+target_link_libraries(risc_microassembler PUBLIC risc_isa)
+
+add_executable(risc_masm src/microassembler_main.cpp)
+target_link_libraries(risc_masm PRIVATE risc_microassembler)
+
 add_executable(risc_run src/main.cpp)
 target_link_libraries(risc_run PRIVATE risc_visualizer)
 
 add_executable(risc_micro_run src/micro_main.cpp)
-target_link_libraries(risc_micro_run PRIVATE risc_isa)
+target_link_libraries(risc_micro_run PRIVATE risc_assembler risc_microassembler)

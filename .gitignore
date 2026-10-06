@@ -7,13 +7,6 @@ Thumbs.db
 .idea/
 *.swp
 
-# Python
-__pycache__/
-*.pyc
-.venv/
-venv/
-*.egg-info/
-
 # Build / output
 build/
 dist/
