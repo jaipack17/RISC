@@ -80,11 +80,9 @@ An instruction with **no microcode** in the `.masm` file stops the run with
 
 ## Current state
 
-`microcode/vertical.masm` contains only the preamble and the `hlt` routine. So:
-
-- a program containing only `hlt` halts after 5 cycles;
-- any other instruction stops with `IllegalInstruction` until its routine is added
-  to `microcode/vertical.masm`.
+`microcode/vertical.masm` provides routines for the ISA, including conditional
+branches on E, GT, C, and V. The micro-ALU updates C and V for add, subtract, and
+compare operations; the branch routines test those flags through `mbeq`.
 
 ## Files involved
 

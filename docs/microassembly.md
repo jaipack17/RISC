@@ -63,7 +63,7 @@ unit then performs the operation in the same cycle.
 
 | Usable as | Registers |
 |---|---|
-| **source** (`src` of `mmov`, `reg` of `mbeq`) | `pc`, `I`, `rd`, `rs1`, `rs2`, `immx`, `branchTarget`, `regSrc`, `regData`, `regVal`, `A`, `B`, `flagE`, `flagGT`, `aluResult`, `mar`, `mdr`, `ldResult` |
+| **source** (`src` of `mmov`, `reg` of `mbeq`) | `pc`, `I`, `rd`, `rs1`, `rs2`, `immx`, `branchTarget`, `regSrc`, `regData`, `regVal`, `A`, `B`, `flagE`, `flagGT`, `flagC`, `flagV`, `aluResult`, `mar`, `mdr`, `ldResult` |
 | **destination** (`dest` of `mmov`/`mmovi`, `reg` of `madd`) | `pc`, `regSrc`, `regData`, `regVal`, `A`, `B`, `aluResult`, `mar`, `mdr`, `ldResult` |
 | **neither** | `ir` (not connected to the bus) |
 
@@ -121,8 +121,8 @@ Errors report the source line.
 - `<args>` on a microinstruction that does not take them.
 - Bad label name, label defined twice, or label used but never defined.
 - More than 1024 microinstructions.
-- **Warning:** an opcode with no entry label (for example `bc` and `bv`, which need
-  the C/V flags). Executing such an opcode raises `IllegalInstruction`.
+- **Warning:** an opcode with no entry label. Executing such an opcode raises
+  `IllegalInstruction`.
 
 ## 10. Output
 

@@ -56,6 +56,8 @@ public:
     Word aluResult = 0;
     bool flagE = false;
     bool flagGT = false;
+    bool flagC = false;
+    bool flagV = false;
 
     void reset() {
         A = 0;
@@ -63,6 +65,21 @@ public:
         aluResult = 0;
         flagE = false;
         flagGT = false;
+        flagC = false;
+        flagV = false;
+    }
+
+    void set_add_flags(bool subtract) {
+        const Word result = subtract ? A - B : A + B;
+        if (subtract) {
+            flagC = A >= B;
+            const std::int64_t exact = std::int64_t(SWord(A)) - std::int64_t(SWord(B));
+            flagV = exact != std::int64_t(SWord(result));
+        } else {
+            flagC = (std::uint64_t(A) + std::uint64_t(B)) >> isa::WORD_BITS != 0;
+            const std::int64_t exact = std::int64_t(SWord(A)) + std::int64_t(SWord(B));
+            flagV = exact != std::int64_t(SWord(result));
+        }
     }
 
     // Carry out the command from args on A and B
@@ -74,13 +91,16 @@ public:
                 break;
             case AluOp::Add:
                 aluResult = A + B;
+                set_add_flags(false);
                 break;
             case AluOp::Sub:
                 aluResult = A - B;
+                set_add_flags(true);
                 break;
             case AluOp::Cmp:
                 flagE = A == B;
                 flagGT = SWord(A) > SWord(B);
+                set_add_flags(true);
                 break;
             case AluOp::Mul:
                 aluResult = A * B;

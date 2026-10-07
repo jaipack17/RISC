@@ -26,6 +26,8 @@ enum class MicroReg : std::uint8_t {
     B,
     flagE,
     flagGT,
+    flagC,
+    flagV,
     aluResult,
     mar,
     mdr,

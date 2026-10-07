@@ -50,6 +50,10 @@ private:
                 return alu.flagE;
             case MicroReg::flagGT:
                 return alu.flagGT;
+            case MicroReg::flagC:
+                return alu.flagC;
+            case MicroReg::flagV:
+                return alu.flagV;
             case MicroReg::aluResult:
                 return alu.aluResult;
             case MicroReg::mar:

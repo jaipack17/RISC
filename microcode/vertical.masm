@@ -254,6 +254,22 @@
     mmov    pc, branchTarget
     mb      .begin
 
+@ bc label
+.bc:
+    mbeq    flagC, 1, .bc_branch
+    mb      .begin
+.bc_branch:
+    mmov    pc, branchTarget
+    mb      .begin
+
+@ bv label
+.bv:
+    mbeq    flagV, 1, .bv_branch
+    mb      .begin
+.bv_branch:
+    mmov    pc, branchTarget
+    mb      .begin
+
 @ call label (pc already points to the next instruction)
 .call:
     mmov    regData, pc

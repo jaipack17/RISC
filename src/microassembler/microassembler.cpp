@@ -138,7 +138,7 @@ std::vector<ParsedLine> first_pass(const std::vector<Line>& lines,
 // Table 9.7 register names, lowercase, in MicroReg order (index 0 is MicroReg::None)
 const char* REGISTER_NAMES[] = {"", "pc", "ir", "i", "rd", "rs1", "rs2", "immx", "branchtarget",
                                 "regsrc", "regdata", "regval", "a", "b", "flage", "flaggt",
-                                "aluresult", "mar", "mdr", "ldresult"};
+                                "flagc", "flagv", "aluresult", "mar", "mdr", "ldresult"};
 
 micro::MicroReg parse_register(unsigned line, const std::string& token) {
     for (unsigned r = 1; r < std::size(REGISTER_NAMES); r++) {

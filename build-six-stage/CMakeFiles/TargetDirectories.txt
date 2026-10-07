@@ -1,0 +1,3 @@
+C:/Users/Sarthak Agarwal/OneDrive/Desktop/RISC/RISC/build-six-stage/CMakeFiles/risc_six_stage.dir
+C:/Users/Sarthak Agarwal/OneDrive/Desktop/RISC/RISC/build-six-stage/CMakeFiles/edit_cache.dir
+C:/Users/Sarthak Agarwal/OneDrive/Desktop/RISC/RISC/build-six-stage/CMakeFiles/rebuild_cache.dir
