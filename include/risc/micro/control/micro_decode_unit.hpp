@@ -9,7 +9,7 @@
 
 namespace risc::micro {
 
-// µfetch multiplexer: where the next µpc comes from (Table 9.9)
+// µfetch multiplexer: where the next µpc comes from
 enum class MicroPCMux : std::uint8_t { Next, BranchTarget, Switch, BranchIfMBranch };
 
 // The control signals for one microinstruction
@@ -26,7 +26,7 @@ struct MicroControlSignals {
     unsigned branchTarget = 0;
 };
 
-// Figure 9.25: splits a 45-bit microinstruction into fields, then generates its control signals
+// splits a 45-bit microinstruction into fields, then generates its control signals
 class MicroDecodeUnit {
 private:
     static MicroWord field(MicroWord word, unsigned pos, unsigned width) {
