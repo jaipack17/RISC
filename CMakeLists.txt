@@ -28,7 +28,7 @@ target_link_libraries(risc_assembler PUBLIC risc_isa)
 add_executable(risc_asm src/assembler_main.cpp)
 target_link_libraries(risc_asm PRIVATE risc_assembler)
 
-add_library(risc_microassembler STATIC src/microassembler/microassembler.cpp)
+add_library(risc_microassembler STATIC src/microassembler/microassembler.cpp src/microassembler/splitter.cpp)
 target_link_libraries(risc_microassembler PUBLIC risc_isa)
 
 add_executable(risc_masm src/microassembler_main.cpp)

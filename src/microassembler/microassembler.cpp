@@ -303,6 +303,7 @@ Microprogram Microassembler::assemble(const std::string& source) const {
     // Pass 2: each microinstruction -> its 45-bit word
     for (const ParsedLine& p : code) {
         program.words.push_back(micro::encode(parse_microinstruction(p, labels)));
+        program.source_lines.push_back(p.number);
     }
 
     // Warn about instructions that have no microcode
