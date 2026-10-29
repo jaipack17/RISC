@@ -27,6 +27,7 @@ struct Entry {
 // Everything the microassembler produces
 struct Microprogram {
     std::vector<micro::MicroWord> words; // word i is stored at µaddress i
+    std::vector<unsigned> source_lines; // source_lines[i] = line of the .masm file that word i came from
     std::vector<Entry> entries; // the switch table
     std::vector<std::string> warnings; // e.g. opcodes with no microcode
 };
