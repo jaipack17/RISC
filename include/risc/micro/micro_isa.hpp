@@ -8,7 +8,7 @@
 
 namespace risc::micro {
 
-// Internal registers visible to microcode (Table 9.7), used as the 5-bit src/dest ids
+// Internal registers visible to microcode, used as the 5-bit src/dest ids
 enum class MicroReg : std::uint8_t {
     None = 0, // no register (e.g. mb, mloadIR)
     pc,
@@ -32,7 +32,7 @@ enum class MicroReg : std::uint8_t {
     ldResult,
 };
 
-// args = unit id (3 bits) + opcode (7 bits), args == 0 means no operation (§9.7.2)
+// args = unit id (3 bits) + opcode (7 bits), args == 0 means no operation
 inline constexpr unsigned ARGS_UNIT_BITS = 3;
 inline constexpr unsigned ARGS_OPCODE_BITS = 7;
 inline constexpr unsigned ARGS_BITS = ARGS_UNIT_BITS + ARGS_OPCODE_BITS;

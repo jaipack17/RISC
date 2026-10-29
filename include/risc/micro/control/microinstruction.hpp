@@ -6,10 +6,10 @@
 
 namespace risc::micro {
 
-// Table 9.8: the 8 microinstructions (3-bit type field)
+// the 8 microinstructions (3-bit type field)
 enum class MicroOp : std::uint8_t { mloadIR = 0, mdecode, mswitch, mmov, mmovi, madd, mbeq, mb };
 
-// Figure 9.24: type 3 | src 5 | dest 5 | immediate 12 | branchTarget 10 | args 10 = 45 bits
+// type 3 | src 5 | dest 5 | immediate 12 | branchTarget 10 | args 10 = 45 bits
 inline constexpr unsigned TYPE_BITS = 3;
 inline constexpr unsigned MICRO_REG_BITS = 5;
 inline constexpr unsigned MICRO_IMM_BITS = 12;
@@ -52,7 +52,7 @@ constexpr MicroWord encode(const Microinstruction& m) {
     return word;
 }
 
-// Microassembly, written as in Table 9.8 (destination first, like the book)
+// Microassembly
 constexpr Microinstruction mloadIR() {
     return {MicroOp::mloadIR};
 }

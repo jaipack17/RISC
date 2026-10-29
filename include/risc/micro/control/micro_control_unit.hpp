@@ -11,7 +11,7 @@
 
 namespace risc::micro {
 
-// Figure 9.25: the µcontrol unit (vertical microprogramming)
+// the µcontrol unit (vertical microprogramming)
 class MicroControlUnit {
 private:
     MicroDecodeUnit micro_decode;
@@ -32,7 +32,7 @@ private:
         }
     }
 
-    // µfetch multiplexer (Table 9.9)
+    // µfetch multiplexer
     unsigned next_upc(const MicroControlSignals& s, const Datapath& datapath) const {
         if (s.next == MicroPCMux::Switch) {
             return switch_unit.get_start_address(datapath.fetch.ir);

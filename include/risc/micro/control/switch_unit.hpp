@@ -7,7 +7,7 @@
 
 namespace risc::micro {
 
-// Figure 9.25: for mswitch, maps the opcode in ir to the µaddress where that instruction's microcode starts
+// for mswitch, maps the opcode in ir to the µaddress where that instruction's microcode starts
 class SwitchUnit {
 private:
     std::array<unsigned, 1u << isa::OPCODE_BITS> start{}; // one entry per opcode

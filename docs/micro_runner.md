@@ -19,7 +19,7 @@ cmake -S . -B build && cmake --build build
 Example:
 
 ```sh
-./build/risc_micro_run programs/sum.asm
+./build/risc_micro_run programs/factorial.asm
 ```
 
 ## What it does
