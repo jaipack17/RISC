@@ -10,9 +10,11 @@ using Word  = isa::Word;
 using SWord = isa::SWord;
 
 enum class AdderAlgorithm : std::uint8_t {
-    RippleCarry,    // Slide 10: O(n) delay
-    CarrySelect,    // Slides 12-14: O(sqrt(n)) delay, k=4
-    CarryLookahead, // Slides 16-26: O(log n) tree CLA / prefix tree
+    RippleCarry,            // Slide 10: O(n) delay
+    CarrySelect,            // Slides 12-14: O(sqrt(n)) delay, k=4
+    HierarchicalGroupedCLA, // Slides 18-25: 4-bit block CLA with hierarchical lookahead
+    PrefixTreeCLA,          // Kogge-Stone parallel prefix tree (log2(n) = 5 levels)
+    CarryLookahead = HierarchicalGroupedCLA, // Primary choice: Hierarchical Grouped CLA
 };
 
 enum class MultiplierAlgorithm : std::uint8_t {
