@@ -48,3 +48,6 @@ target_link_libraries(risc_micro_visualizer PUBLIC risc_visualizer risc_microass
 
 add_executable(risc_micro_view src/micro_view_main.cpp)
 target_link_libraries(risc_micro_view PRIVATE risc_micro_visualizer risc_assembler)
+
+add_executable(risc_alu_test src/alu_test_main.cpp)
+target_link_libraries(risc_alu_test PRIVATE risc_isa)

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <limits>
 
+#include "risc/alu/alu.hpp"
 #include "risc/exception.hpp"
 #include "risc/isa/isa_config.hpp"
 
@@ -31,24 +31,7 @@ private:
     using Word = isa::Word;
     using SWord = isa::SWord;
 
-    // Signed, rounds toward zero, remainder takes the sign of A
-    Word divide(bool remainder) {
-        if (B == 0) {
-            throw CpuException{isa::Exception::DivideByZero, 0};
-        }
-        SWord x = SWord(A);
-        SWord y = SWord(B);
-        if (x == std::numeric_limits<SWord>::min() && y == -1) {
-            if (remainder) {
-                return 0;
-            }
-            return A;
-        }
-        if (remainder) {
-            return Word(x % y);
-        }
-        return Word(x / y);
-    }
+    alu::OptimizedALU core_alu;
 
 public:
     Word A = 0;
@@ -56,6 +39,11 @@ public:
     Word aluResult = 0;
     bool flagE = false;
     bool flagGT = false;
+
+    explicit ALU(alu::AdderAlgorithm adder = alu::AdderAlgorithm::CarryLookahead,
+                 alu::MultiplierAlgorithm multiplier = alu::MultiplierAlgorithm::BoothRadix2,
+                 alu::DividerAlgorithm divider = alu::DividerAlgorithm::Restoring)
+        : core_alu(adder, multiplier, divider) {}
 
     void reset() {
         A = 0;
@@ -65,54 +53,63 @@ public:
         flagGT = false;
     }
 
+    void select_adder(alu::AdderAlgorithm algo) { core_alu.select_adder(algo); }
+    void select_multiplier(alu::MultiplierAlgorithm algo) { core_alu.select_multiplier(algo); }
+    void select_divider(alu::DividerAlgorithm algo) { core_alu.select_divider(algo); }
+
+    const alu::OptimizedALU& core() const { return core_alu; }
+    alu::OptimizedALU& core() { return core_alu; }
+
     // Carry out the command from args on A and B
     void run(AluOp op) {
-        unsigned shift = B & (isa::WORD_BITS - 1); // only the low 5 bits of B
+        alu::ALUFlags flags;
 
         switch (op) {
             case AluOp::Nop:
                 break;
             case AluOp::Add:
-                aluResult = A + B;
+                aluResult = core_alu.add(A, B, flags);
                 break;
             case AluOp::Sub:
-                aluResult = A - B;
+                aluResult = core_alu.sub(A, B, flags);
                 break;
             case AluOp::Cmp:
-                flagE = A == B;
-                flagGT = SWord(A) > SWord(B);
+                core_alu.cmp(A, B, flags);
+                flagE = flags.E;
+                flagGT = flags.GT;
                 break;
             case AluOp::Mul:
-                aluResult = A * B;
+                aluResult = core_alu.mul(A, B);
                 break;
             case AluOp::Div:
-                aluResult = divide(false);
+                aluResult = core_alu.div(A, B);
                 break;
             case AluOp::Mod:
-                aluResult = divide(true);
+                aluResult = core_alu.mod(A, B);
                 break;
             case AluOp::Lsl:
-                aluResult = A << shift;
+                aluResult = core_alu.shift(A, B, alu::ShiftOp::Lsl);
                 break;
             case AluOp::Lsr:
-                aluResult = A >> shift;
+                aluResult = core_alu.shift(A, B, alu::ShiftOp::Lsr);
                 break;
             case AluOp::Asr:
-                aluResult = Word(SWord(A) >> shift);
+                aluResult = core_alu.shift(A, B, alu::ShiftOp::Asr);
                 break;
             case AluOp::And:
-                aluResult = A & B;
+                aluResult = alu::OptimizedALU::bitwise_and(A, B);
                 break;
             case AluOp::Or:
-                aluResult = A | B;
+                aluResult = alu::OptimizedALU::bitwise_or(A, B);
                 break;
             case AluOp::Xor:
-                aluResult = A ^ B;
+                aluResult = alu::OptimizedALU::bitwise_xor(A, B);
                 break;
             case AluOp::Not:
-                aluResult = ~B;
+                aluResult = alu::OptimizedALU::bitwise_not(B);
                 break;
         }
     }
 };
-}
+
+} // namespace risc::micro
