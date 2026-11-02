@@ -44,13 +44,14 @@ static int tests_passed = 0;
 } while (0)
 
 void test_adder_algorithms() {
-    std::cout << "Testing Adder Algorithms (Ripple-Carry, Carry-Select, Carry-Lookahead)...\n";
+    std::cout << "Testing Adder Algorithms (Ripple-Carry, Carry-Select, Grouped CLA, Prefix Tree CLA)...\n";
     OptimizedALU alu;
 
     const std::vector<AdderAlgorithm> adders = {
         AdderAlgorithm::RippleCarry,
         AdderAlgorithm::CarrySelect,
-        AdderAlgorithm::CarryLookahead
+        AdderAlgorithm::HierarchicalGroupedCLA,
+        AdderAlgorithm::PrefixTreeCLA
     };
 
     for (auto algo : adders) {
@@ -91,7 +92,7 @@ void test_adder_algorithms() {
         EXPECT_TRUE(flags.C);
     }
 
-    // Exhaustive randomized differential test across all 3 adders
+    // Exhaustive randomized differential test across all 4 adders
     std::mt19937 rng(42);
     std::uniform_int_distribution<std::uint32_t> dist;
     for (int i = 0; i < 1000; ++i) {
@@ -99,14 +100,18 @@ void test_adder_algorithms() {
         Word b = dist(rng);
         AdderResult rca = Adders::add(a, b, false, AdderAlgorithm::RippleCarry);
         AdderResult csa = Adders::add(a, b, false, AdderAlgorithm::CarrySelect);
-        AdderResult cla = Adders::add(a, b, false, AdderAlgorithm::CarryLookahead);
+        AdderResult hgcla = Adders::add(a, b, false, AdderAlgorithm::HierarchicalGroupedCLA);
+        AdderResult ptcla = Adders::add(a, b, false, AdderAlgorithm::PrefixTreeCLA);
 
         EXPECT_EQ(rca.sum, csa.sum);
-        EXPECT_EQ(csa.sum, cla.sum);
+        EXPECT_EQ(csa.sum, hgcla.sum);
+        EXPECT_EQ(hgcla.sum, ptcla.sum);
         EXPECT_EQ(rca.carry_out, csa.carry_out);
-        EXPECT_EQ(csa.carry_out, cla.carry_out);
+        EXPECT_EQ(csa.carry_out, hgcla.carry_out);
+        EXPECT_EQ(hgcla.carry_out, ptcla.carry_out);
         EXPECT_EQ(rca.overflow, csa.overflow);
-        EXPECT_EQ(csa.overflow, cla.overflow);
+        EXPECT_EQ(csa.overflow, hgcla.overflow);
+        EXPECT_EQ(hgcla.overflow, ptcla.overflow);
     }
 }
 
@@ -271,20 +276,21 @@ void print_alu_characteristics() {
     std::cout << "============================================================\n";
 
     std::cout << "\n[1] 32-bit Adders / Subtractors:\n";
-    std::cout << std::left << std::setw(42) << "Algorithm"
+    std::cout << std::left << std::setw(45) << "Algorithm"
               << std::setw(14) << "Logic Depth"
               << std::setw(14) << "Nodes (FAs)"
               << "FO4 Delay\n";
-    std::cout << std::string(78, '-') << '\n';
+    std::cout << std::string(82, '-') << '\n';
 
     const AdderAlgorithm adders[] = {
         AdderAlgorithm::RippleCarry,
         AdderAlgorithm::CarrySelect,
-        AdderAlgorithm::CarryLookahead
+        AdderAlgorithm::HierarchicalGroupedCLA,
+        AdderAlgorithm::PrefixTreeCLA
     };
     for (auto a : adders) {
         auto c = Adders::characteristics(a);
-        std::cout << std::left << std::setw(42) << c.name
+        std::cout << std::left << std::setw(45) << c.name
                   << std::setw(14) << c.logic_depth
                   << std::setw(14) << c.operator_nodes
                   << c.estimated_fo4 << " FO4\n";
