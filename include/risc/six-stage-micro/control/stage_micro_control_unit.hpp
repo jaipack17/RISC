@@ -57,6 +57,8 @@ public:
     micro::MicroControlSignals signals; // signals of the last microinstruction (for display)
     bool done = true; // finished its section for this beat
     bool halted = false;
+    bool ran = false; // ran a microinstruction in the last microcycle (for display)
+    unsigned last_upc = 0; // the µaddress it ran
 
     StageMicroControlUnit(Stage s) {
         stage = s;
@@ -67,6 +69,8 @@ public:
         signals = micro::MicroControlSignals{};
         done = true;
         halted = false;
+        ran = false;
+        last_upc = 0;
     }
 
     // Store this stage's microprogram, starting at address 0
@@ -91,9 +95,12 @@ public:
 
     // One microcycle: run the microinstruction at µpc, then pick the next µpc
     void step(Datapath& datapath, memory::Memory& memory) {
+        ran = false;
         if (done || halted) {
             return;
         }
+        ran = true;
+        last_upc = upc;
         signals = micro_decode.decode(microprogram[upc]);
         apply_signals(signals, datapath, memory);
         upc = next_upc(signals, datapath);

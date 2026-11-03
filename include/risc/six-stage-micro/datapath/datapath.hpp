@@ -151,6 +151,8 @@ public:
     std::array<isa::Word, NUM_STAGES> read_bus{};
     std::array<bool, NUM_STAGES> isMBranch{}; // write bus == µimm, used by mbeq
 
+    std::uint64_t fetch_count = 0; // instructions fetched so far (gives each packet its id)
+
     // Set when EX loads the pc (a taken branch)
     bool branchTaken = false;
     isa::Word branchPc = 0;
@@ -172,6 +174,7 @@ public:
         isMBranch.fill(false);
         branchTaken = false;
         branchPc = 0;
+        fetch_count = 0;
     }
 
     // The packet a stage works on
@@ -199,6 +202,8 @@ public:
         InstructionPacket& p = fetched;
         fetch.load_ir(memory.read_word(fetch.fetch_address()));
         p.bubble = false;
+        fetch_count++;
+        p.id = fetch_count;
         p.currentPc = fetch.pc;
         p.nextPc = fetch.pc;
         p.ir = fetch.ir;

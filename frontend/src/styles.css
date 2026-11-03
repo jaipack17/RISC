@@ -1,0 +1,882 @@
+/* Black, flat, square. Colours follow Sarangi's figures: teal buses, peach registers,
+   pink memories, green latches, lime µcontrol, red feedback paths, blue control lines. */
+
+:root {
+  --bg: #000;
+  --panel: #050505;
+  --line: #1c1c1c;
+  --line-strong: #2e2e2e;
+  --text: #d8d8d8;
+  --dim: #6b6b6b;
+  --faint: #3a3a3a;
+
+  --bus: #5fb4c0;
+  --bus-fill: #0b1f22;
+  --reg: #e3a87c;
+  --reg-fill: #1d130c;
+  --mem: #e2879b;
+  --mem-fill: #1e0d12;
+  --latch: #4fd17a;
+  --latch-fill: #0a1f12;
+  --uc: #b6e04a;
+  --uc-fill: #141c06;
+  --feedback: #ff2e63;
+  --control: #4a7dff;
+  --active: #ffffff;
+  --wait: #f5a524;
+  --fault: #ff4d4d;
+
+  --mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  border-radius: 0 !important;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 12px/1.45 var(--sans);
+}
+
+h2 {
+  margin: 0 0 10px;
+  font: 500 10px/1 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+
+button,
+select {
+  font: 11px var(--mono);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+select:hover {
+  border-color: var(--text);
+}
+
+button:disabled {
+  color: var(--faint);
+  border-color: var(--line);
+  cursor: default;
+}
+
+button.selected {
+  border-color: var(--text);
+  color: var(--active);
+}
+
+select option {
+  background: var(--bg);
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.small {
+  font-size: 11px;
+}
+
+/* layout */
+
+.app main {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel {
+  border-bottom: 1px solid var(--line);
+  padding: 16px 20px;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+}
+
+.row > .panel {
+  border-bottom: none;
+}
+
+.row > .panel + .panel {
+  border-left: 1px solid var(--line);
+}
+
+.grow {
+  flex: 1 1 640px;
+}
+
+.side {
+  flex: 0 1 300px;
+}
+
+.half {
+  flex: 1 1 480px;
+}
+
+.scroll {
+  max-height: 380px;
+  overflow: auto;
+}
+
+.pipeline-scroll {
+  overflow-x: auto;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+}
+
+/* toolbar */
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 20px;
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font: 600 12px var(--mono);
+  letter-spacing: 0.04em;
+  margin-right: 12px;
+}
+
+.toolbar-row.counters {
+  margin-top: 8px;
+  gap: 20px;
+  font: 11px var(--mono);
+  color: var(--dim);
+}
+
+.counters b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.speed input {
+  width: 90px;
+  vertical-align: middle;
+  accent-color: var(--text);
+}
+
+.status {
+  color: var(--text);
+}
+
+.status.halted {
+  color: var(--latch);
+}
+
+.status.exception {
+  color: var(--fault);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.editor textarea {
+  font: 12px/1.5 var(--mono);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  padding: 10px;
+  outline: none;
+}
+
+.editor button {
+  align-self: flex-start;
+}
+
+.error {
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--fault);
+  color: var(--fault);
+  font-family: var(--mono);
+}
+
+/* ---- datapath diagram ---- */
+
+.dp {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.dp text {
+  font-family: var(--mono);
+  font-size: 10px;
+  fill: var(--text);
+}
+
+.dp rect {
+  stroke-width: 1;
+}
+
+.dp .left {
+  text-anchor: start;
+}
+
+.dp .right {
+  text-anchor: end;
+}
+
+.dp .dim {
+  fill: var(--dim);
+}
+
+.dp .unit-title {
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.dp .unit-line {
+  fill: var(--dim);
+}
+
+.dp .code {
+  fill: var(--text);
+}
+
+/* stage frames */
+.dp .stage {
+  fill: none;
+  stroke: var(--line-strong);
+}
+
+.dp .stage.on {
+  stroke: #555;
+}
+
+.dp .stage.wait {
+  stroke: var(--wait);
+  stroke-dasharray: 4 3;
+}
+
+.dp .stage.fault {
+  stroke: var(--fault);
+}
+
+.dp .stage-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.dp .stage-tag {
+  fill: var(--dim);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dp .stage-instr {
+  font-size: 11px;
+}
+
+/* local buses */
+.dp .bus rect {
+  fill: var(--bus-fill);
+  stroke: var(--bus);
+  stroke-opacity: 0.5;
+}
+
+.dp .bus.on rect {
+  fill: #12363b;
+  stroke-opacity: 1;
+}
+
+.dp .bus-label {
+  fill: var(--bus);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dp .bus-text {
+  fill: var(--active);
+  font-size: 10px;
+}
+
+/* registers on the buses */
+.dp .slot rect {
+  fill: var(--reg-fill);
+  stroke: var(--reg);
+  stroke-opacity: 0.45;
+}
+
+.dp .slot .slot-name {
+  fill: var(--reg);
+  font-size: 9.5px;
+}
+
+.dp .slot .slot-value {
+  fill: var(--dim);
+  font-size: 9.5px;
+}
+
+.dp .slot.read rect {
+  stroke-opacity: 1;
+  stroke-width: 1.5;
+}
+
+.dp .slot.written rect {
+  fill: var(--reg);
+  stroke-opacity: 1;
+}
+
+.dp .slot.written text {
+  fill: #000;
+}
+
+/* units, memories, register file */
+.dp .unit rect {
+  fill: var(--reg-fill);
+  stroke: var(--reg);
+  stroke-opacity: 0.45;
+}
+
+.dp .unit.on rect {
+  stroke-opacity: 1;
+  stroke-width: 1.5;
+  fill: #2b1c10;
+}
+
+.dp .memory rect {
+  fill: var(--mem-fill);
+  stroke: var(--mem);
+  stroke-opacity: 0.45;
+}
+
+.dp .memory.on rect {
+  stroke-opacity: 1;
+  stroke-width: 1.5;
+}
+
+.dp .memory .unit-title {
+  fill: var(--mem);
+}
+
+.dp .reg {
+  fill: var(--dim);
+  font-size: 10px;
+  white-space: pre;
+}
+
+.dp .reg.hot {
+  fill: var(--active);
+}
+
+.dp .flags rect {
+  fill: var(--latch-fill);
+  stroke: var(--latch);
+  stroke-opacity: 0.5;
+}
+
+.dp .flags.on rect {
+  stroke-opacity: 1;
+}
+
+.dp .branchunit.on rect {
+  stroke: var(--feedback);
+  fill: #2a0812;
+}
+
+/* µcontrol */
+.dp .ucontrol rect {
+  fill: var(--uc-fill);
+  stroke: var(--uc);
+  stroke-opacity: 0.4;
+}
+
+.dp .ucontrol .unit-title {
+  fill: var(--uc);
+}
+
+.dp .ucontrol.on rect {
+  stroke-opacity: 1;
+}
+
+.dp .ucontrol.wait rect {
+  stroke: var(--wait);
+  stroke-opacity: 1;
+  stroke-dasharray: 4 3;
+}
+
+/* beat controller */
+.dp .controller rect {
+  fill: none;
+  stroke: var(--control);
+  stroke-opacity: 0.4;
+}
+
+.dp .controller.on rect {
+  stroke-opacity: 1;
+}
+
+.dp .controller .unit-title {
+  fill: var(--control);
+}
+
+/* latches */
+.dp .latch rect {
+  fill: var(--latch-fill);
+  stroke: var(--latch);
+  stroke-opacity: 0.35;
+}
+
+.dp .latch.full rect {
+  fill: #0f3a1f;
+  stroke-opacity: 1;
+}
+
+.dp .latch.fault rect {
+  stroke: var(--fault);
+}
+
+.dp .latch .pulse {
+  animation: latch-pulse 0.6s ease-out;
+}
+
+@keyframes latch-pulse {
+  from {
+    fill: var(--latch);
+  }
+}
+
+.dp .latch-name {
+  fill: var(--latch);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+}
+
+.dp .latch-id {
+  fill: var(--dim);
+}
+
+/* wires */
+.dp .w {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 1.2;
+}
+
+.dp .w-data.on {
+  stroke: var(--active);
+  stroke-width: 1.8;
+}
+
+.dp .w-feedback {
+  stroke: #3a0f1a;
+  stroke-width: 4;
+}
+
+.dp .w-feedback.on {
+  stroke: var(--feedback);
+}
+
+.dp .w-control {
+  stroke: #142046;
+  stroke-dasharray: 5 4;
+}
+
+.dp .w-control.on {
+  stroke: var(--control);
+}
+
+.dp .w-stall.on {
+  stroke: var(--wait);
+  stroke-dasharray: 5 4;
+}
+
+.dp .w-flush.on {
+  stroke: var(--feedback);
+  stroke-dasharray: 5 4;
+}
+
+.dp .w.flow {
+  stroke-dasharray: 6 5;
+  animation: flow 0.5s linear infinite;
+}
+
+@keyframes flow {
+  to {
+    stroke-dashoffset: -11;
+  }
+}
+
+.dp .wire-label {
+  fill: var(--dim);
+  font-size: 9.5px;
+}
+
+.dp .wire-label.feedback,
+.dp .wire-label.flush {
+  fill: var(--feedback);
+}
+
+.dp .wire-label.stall {
+  fill: var(--wait);
+}
+
+.dp .head {
+  fill: var(--faint);
+}
+
+/* ---- tables ---- */
+
+table {
+  border-collapse: collapse;
+  font: 11px var(--mono);
+}
+
+th,
+td {
+  padding: 3px 7px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+th.left,
+td.left {
+  text-align: left;
+}
+
+thead th {
+  font-weight: 400;
+  color: var(--dim);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.pipeline td.cell {
+  border: 1px solid #000;
+  font-size: 10px;
+  color: #000;
+  font-weight: 600;
+}
+
+.pipeline th.taken {
+  color: var(--feedback);
+}
+
+.pipeline th.live {
+  color: var(--active);
+  border-bottom-color: var(--active);
+}
+
+.pipeline td.cell.waited {
+  background: transparent !important;
+  color: var(--wait);
+  outline: 1px dashed var(--wait);
+  outline-offset: -2px;
+}
+
+.pipeline td.cell.fault {
+  background: var(--fault) !important;
+}
+
+.pipeline tr.flushed td {
+  color: var(--faint);
+}
+
+.pipeline tr.flushed td.cell {
+  background: transparent !important;
+  color: var(--faint);
+  text-decoration: line-through;
+  outline: 1px solid var(--line-strong);
+  outline-offset: -2px;
+}
+
+/* one colour per stage */
+.stage-IF {
+  background: var(--reg);
+}
+.stage-OF1 {
+  background: var(--bus);
+}
+.stage-OF2 {
+  background: #7fa6d8;
+}
+.stage-EX {
+  background: var(--uc);
+}
+.stage-MA {
+  background: var(--mem);
+}
+.stage-RW {
+  background: var(--latch);
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 9.5px;
+  color: #000;
+  font-weight: 600;
+}
+
+.flush-tag {
+  background: transparent;
+  color: var(--feedback);
+  border: 1px solid var(--feedback);
+  font-weight: 400;
+}
+
+.microcode .tag {
+  background: transparent;
+  color: var(--dim);
+  border: 1px solid var(--line-strong);
+  font-weight: 400;
+}
+
+.listing td {
+  color: var(--dim);
+}
+
+.listing td.mono {
+  color: var(--text);
+}
+
+.listing td.indent {
+  padding-left: 24px;
+}
+
+.listing tr.current td {
+  background: #0f0f0f;
+}
+
+.microcode tr.next td {
+  background: #0f0f0f;
+}
+
+.microcode tr.ran td {
+  background: var(--text);
+  color: #000;
+}
+
+.microcode tr.end td {
+  color: var(--faint);
+  border-bottom: 1px solid var(--line);
+}
+
+.registers tr.changed td {
+  color: var(--active);
+  background: #111;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.tabs .dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 5px;
+  background: var(--uc);
+  vertical-align: middle;
+}
+
+.latches td {
+  border-left: 1px solid var(--line);
+}
+
+p {
+  margin: 6px 0 0;
+}
+
+/* ---- view toggle ---- */
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.panel-head h2 {
+  margin: 0;
+}
+
+.toggle {
+  display: flex;
+}
+
+.toggle button + button {
+  border-left: none;
+}
+
+/* ---- black-box view: stages are solid blocks in their stage colour ---- */
+
+.dp .box rect {
+  stroke: none;
+}
+
+.dp .box.s-IF rect {
+  fill: var(--reg);
+}
+.dp .box.s-OF1 rect {
+  fill: var(--bus);
+}
+.dp .box.s-OF2 rect {
+  fill: #7fa6d8;
+}
+.dp .box.s-EX rect {
+  fill: var(--uc);
+}
+.dp .box.s-MA rect {
+  fill: var(--mem);
+}
+.dp .box.s-RW rect {
+  fill: var(--latch);
+}
+
+.dp .box.empty rect {
+  opacity: 0.28;
+}
+
+.dp .box.on rect {
+  stroke: var(--active);
+  stroke-width: 2;
+}
+
+.dp .box.wait rect {
+  stroke: var(--wait);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.dp .box text {
+  fill: #000;
+}
+
+.dp .box.empty text {
+  fill: var(--text);
+  opacity: 0.6;
+}
+
+.dp .box-name {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.dp .box-line {
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.dp .token {
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dp .token rect {
+  fill: #000;
+}
+
+.dp .token.on rect {
+  stroke: var(--active);
+  stroke-width: 1.5;
+}
+
+.dp .token.wait rect {
+  stroke: var(--wait);
+  stroke-dasharray: 4 3;
+}
+
+.dp .token.fault rect {
+  stroke: var(--fault);
+}
+
+.dp .token-id {
+  fill: var(--dim);
+  font-size: 9.5px;
+}
+
+.dp .token-text {
+  font-size: 11.5px;
+  fill: var(--active);
+}
+
+.dp .ghost.retired {
+  animation: retire 0.9s ease-out forwards;
+}
+
+.dp .ghost.retired rect {
+  stroke: var(--latch);
+}
+
+.dp .ghost.flushed {
+  animation: flushed 0.9s ease-out forwards;
+}
+
+.dp .ghost.flushed rect {
+  stroke: var(--feedback);
+}
+
+.dp .ghost.flushed .token-text {
+  fill: var(--feedback);
+  text-decoration: line-through;
+}
+
+@keyframes retire {
+  to {
+    transform: translate(70px, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes flushed {
+  to {
+    transform: translate(0, 30px);
+    opacity: 0;
+  }
+}

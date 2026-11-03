@@ -15,6 +15,7 @@ inline constexpr unsigned NUM_STAGES = 6;
 // A pipeline latch holds one packet. bubble == true means the latch holds no instruction.
 struct InstructionPacket {
     bool bubble = true;
+    std::uint64_t id = 0; // for display: 1 for the first instruction fetched, 2 for the next, ...
 
     // set by IF
     isa::Word currentPc = 0; // address of the instruction

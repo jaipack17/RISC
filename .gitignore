@@ -15,3 +15,5 @@ dist/
 *.log
 
 CLAUDE.md
+# Frontend
+node_modules/
