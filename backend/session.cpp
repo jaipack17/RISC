@@ -8,7 +8,7 @@
 #include "risc/micro/control/micro_decode_unit.hpp"
 #include "risc/micro/control/microinstruction.hpp"
 #include "risc/micro/micro_isa.hpp"
-#include "risc/visualizer/visualizer.hpp"
+#include "json_util.hpp"
 
 namespace risc::web {
 
@@ -20,138 +20,6 @@ using six_stage_micro::Stage;
 namespace {
 
 const char* STAGE_NAMES[] = {"IF", "OF1", "OF2", "EX", "MA", "RW"};
-
-// In the same order as micro::MicroReg
-const char* REGISTER_NAMES[] = {"",        "pc",     "ir",     "I",     "rd",    "rs1",    "rs2",
-                                "immx",    "branchTarget", "regSrc", "regData", "regVal", "A", "B",
-                                "flagE",   "flagGT", "aluResult", "mar", "mdr",   "ldResult"};
-
-// In the same order as micro::MicroOp
-const char* MICRO_OP_NAMES[] = {"mloadIR", "mdecode", "mswitch", "mmov", "mmovi", "madd", "mbeq", "mb"};
-
-// In the same order as micro::AluOp
-const char* ALU_OP_NAMES[] = {"nop", "add", "sub", "cmp", "mul", "div", "mod",
-                              "lsl", "lsr", "asr", "and", "or",  "xor", "not"};
-
-// In the same order as micro::TransferMux and micro::MicroPCMux
-const char* TRANSFER_MUX_NAMES[] = {"writeBus", "immediate", "microAdder"};
-const char* MICRO_PC_MUX_NAMES[] = {"next", "branchTarget", "switch", "branchIfMBranch"};
-
-// In the same order as isa::Exception
-const char* EXCEPTION_NAMES[] = {"IllegalInstruction", "MisalignedAccess", "MisalignedFetch",
-                                 "OutOfBoundsAccess", "WriteToText", "ExecuteOutsideText",
-                                 "DivideByZero", "StackOverflow", "StackUnderflow"};
-
-std::string register_name(micro::MicroReg reg) {
-    unsigned index = unsigned(reg);
-    if (index < std::size(REGISTER_NAMES)) {
-        return REGISTER_NAMES[index];
-    }
-    return "?";
-}
-
-// The text of an args field, e.g. "add", "read", "load", "halt" ("" for no args)
-std::string args_name(micro::Args a) {
-    if (a == micro::NO_ARGS) {
-        return "";
-    }
-    unsigned opcode = micro::args_opcode(a);
-    micro::UnitId unit = micro::args_unit(a);
-    if (unit == micro::UnitId::Alu && opcode < std::size(ALU_OP_NAMES)) {
-        return ALU_OP_NAMES[opcode];
-    }
-    if (unit == micro::UnitId::RegisterFile) {
-        if (micro::RegisterFileOp(opcode) == micro::RegisterFileOp::Read) {
-            return "read";
-        }
-        return "write";
-    }
-    if (unit == micro::UnitId::Memory) {
-        if (micro::MemoryOp(opcode) == micro::MemoryOp::Load) {
-            return "load";
-        }
-        return "store";
-    }
-    if (unit == micro::UnitId::Control) {
-        return "halt";
-    }
-    return "?";
-}
-
-// The unit an args field goes to
-std::string args_unit_name(micro::Args a) {
-    if (a == micro::NO_ARGS) {
-        return "";
-    }
-    micro::UnitId unit = micro::args_unit(a);
-    if (unit == micro::UnitId::Alu) {
-        return "alu";
-    }
-    if (unit == micro::UnitId::RegisterFile) {
-        return "registerFile";
-    }
-    if (unit == micro::UnitId::Memory) {
-        return "memory";
-    }
-    return "control";
-}
-
-std::string trim(const std::string& text) {
-    std::size_t first = text.find_first_not_of(" \t");
-    if (first == std::string::npos) {
-        return "";
-    }
-    std::size_t last = text.find_last_not_of(" \t\r");
-    return text.substr(first, last - first + 1);
-}
-
-std::string disassemble(isa::Word pc, isa::Word ir) {
-    return visualizer::disassemble(pc, ir);
-}
-
-json microinstruction_json(micro::MicroWord word) {
-    micro::Microinstruction m = micro::MicroDecodeUnit::fields(word);
-    json j;
-    j["type"] = MICRO_OP_NAMES[unsigned(m.type)];
-    j["src"] = register_name(m.src);
-    j["dest"] = register_name(m.dest);
-    j["imm"] = m.imm;
-    j["branchTarget"] = m.branchTarget;
-    j["args"] = args_name(m.args);
-    j["argsUnit"] = args_unit_name(m.args);
-    return j;
-}
-
-json packet_json(const InstructionPacket& p) {
-    json j;
-    j["bubble"] = p.bubble;
-    j["id"] = p.id;
-    j["currentPc"] = p.currentPc;
-    j["nextPc"] = p.nextPc;
-    j["ir"] = p.ir;
-    j["assembly"] = "";
-    if (!p.bubble && !p.hasException) {
-        j["assembly"] = disassemble(p.currentPc, p.ir);
-    }
-    j["I"] = p.I;
-    j["rd"] = p.rd;
-    j["rs1"] = p.rs1;
-    j["rs2"] = p.rs2;
-    j["immx"] = p.immx;
-    j["branchTarget"] = p.branchTarget;
-    j["A"] = p.A;
-    j["B"] = p.B;
-    j["regVal"] = p.regVal;
-    j["regData"] = p.regData;
-    j["aluResult"] = p.aluResult;
-    j["ldResult"] = p.ldResult;
-    j["hasException"] = p.hasException;
-    j["exception"] = "";
-    if (p.hasException) {
-        j["exception"] = EXCEPTION_NAMES[unsigned(p.exception.kind)];
-    }
-    return j;
-}
 
 json beat_json(const BeatRecord& beat) {
     json j;
@@ -231,6 +99,7 @@ void Session::restart() {
     cpu.reset();
     beat_open = false;
     beat_log.clear();
+    return_slots.clear();
 }
 
 void Session::reset() {
@@ -241,6 +110,17 @@ void Session::reset() {
 void Session::open_beat() {
     current_beat = BeatRecord{};
     current_beat.number = beat_log.size() + 1;
+
+    // The st that writes memory in MA this beat: remember whether it saves ra
+    isa::Word store_address = 0;
+    bool from_ra = false;
+    if (store_of(cpu.datapath.packet_of(Stage::MA), store_address, from_ra)) {
+        if (from_ra) {
+            return_slots.insert(store_address);
+        } else {
+            return_slots.erase(store_address);
+        }
+    }
     for (unsigned s = unsigned(Stage::OF1); s < NUM_STAGES; s++) {
         const InstructionPacket& p = cpu.datapath.packet_of(Stage(s));
         BeatCell& cell = current_beat.cells[s];
@@ -318,6 +198,7 @@ void Session::run(std::uint64_t max_microcycles) {
 
 json Session::program_json() const {
     json j;
+    j["processor"] = "six";
     j["name"] = program_name;
     j["source"] = program_source;
 
@@ -329,6 +210,7 @@ json Session::program_json() const {
         l["hasInstruction"] = line.has_instruction;
         l["address"] = line.address;
         l["word"] = line.word;
+        l["macro"] = line.macro;
         l["assembly"] = "";
         if (line.has_instruction) {
             l["assembly"] = disassemble(line.address, line.word);
@@ -377,10 +259,11 @@ json Session::program_json() const {
 
 json Session::state_json() const {
     json j;
+    j["processor"] = "six";
     j["status"] = status_name(cpu.status);
     j["exception"] = nullptr;
     if (cpu.status == CpuStatus::Exception) {
-        j["exception"]["kind"] = EXCEPTION_NAMES[unsigned(cpu.exception.kind)];
+        j["exception"]["kind"] = exception_name(cpu.exception);
         j["exception"]["pc"] = cpu.exception_pc;
     }
 
@@ -419,17 +302,7 @@ json Session::state_json() const {
             st["sourceLine"] = program.source_lines[stage.last_upc];
             st["part"] = bool(program.parts[stage.last_upc]);
         }
-        st["signals"]["loadIR"] = stage.signals.loadIR;
-        st["signals"]["decode"] = stage.signals.decode;
-        st["signals"]["transfer"] = stage.signals.transfer;
-        st["signals"]["src"] = register_name(stage.signals.src);
-        st["signals"]["dest"] = register_name(stage.signals.dest);
-        st["signals"]["mux"] = TRANSFER_MUX_NAMES[unsigned(stage.signals.mux)];
-        st["signals"]["imm"] = stage.signals.imm;
-        st["signals"]["args"] = args_name(stage.signals.args);
-        st["signals"]["argsUnit"] = args_unit_name(stage.signals.args);
-        st["signals"]["next"] = MICRO_PC_MUX_NAMES[unsigned(stage.signals.next)];
-        st["signals"]["branchTarget"] = stage.signals.branchTarget;
+        st["signals"] = signals_json(stage.signals);
         st["writeBus"] = cpu.datapath.write_bus[s];
         st["readBus"] = cpu.datapath.read_bus[s];
         st["isMBranch"] = bool(cpu.datapath.isMBranch[s]);
@@ -483,6 +356,8 @@ json Session::state_json() const {
             j["memory"].push_back(m);
         }
     }
+
+    j["stack"] = stack_json(memory, d.register_file.value(isa::REG_SP), return_slots);
 
     j["beatLog"] = json::array();
     for (const BeatRecord& beat : beat_log) {

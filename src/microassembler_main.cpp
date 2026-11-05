@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "risc/isa/isa_config.hpp"
+#include "risc/four-stage-micro/pipeline.hpp"
+#include "risc/microassembler/four_stage_splitter.hpp"
 #include "risc/microassembler/microassembler.hpp"
 #include "risc/microassembler/splitter.hpp"
 #include "risc/six-stage-micro/pipeline.hpp"
@@ -22,7 +24,8 @@ std::string mnemonic_of(isa::Opcode opcode) {
     return "?";
 }
 
-const char* STAGE_NAMES[] = {"IF", "OF1", "OF2", "EX", "MA", "RW"};
+const char* SIX_STAGE_NAMES[] = {"IF", "OF1", "OF2", "EX", "MA", "RW"};
+const char* FOUR_STAGE_NAMES[] = {"IF", "OF", "EX", "MW"};
 
 // The lines of a text file (lines[0] is line 1), without their indentation
 std::vector<std::string> read_source_lines(const std::string& path) {
@@ -37,12 +40,11 @@ std::vector<std::string> read_source_lines(const std::string& path) {
 }
 
 // Prints each stage's microprogram, with the .masm line every word came from, and its switch table
-void print_stages(const microassembler::Microprogram& program, const std::vector<std::string>& source) {
-    std::array<microassembler::StageMicroprogram, six_stage_micro::NUM_STAGES> stages = microassembler::split(program);
-
-    for (unsigned s = 0; s < six_stage_micro::NUM_STAGES; s++) {
+void print_stages(const microassembler::StageMicroprogram* stages, unsigned count, const char* const* names,
+                  const std::vector<std::string>& source) {
+    for (unsigned s = 0; s < count; s++) {
         const microassembler::StageMicroprogram& stage = stages[s];
-        std::printf("\n%s stage microprogram (%zu microinstructions):\n", STAGE_NAMES[s], stage.words.size());
+        std::printf("\n%s stage microprogram (%zu microinstructions):\n", names[s], stage.words.size());
 
         for (unsigned i = 0; i < stage.words.size(); i++) {
             std::printf("  µ%-4u 0x%012llX  ", i, (unsigned long long)stage.words[i]);
@@ -50,14 +52,14 @@ void print_stages(const microassembler::Microprogram& program, const std::vector
             if (line == 0) {
                 std::printf("(end of section)\n");
             } else if (stage.parts[i]) {
-                std::printf("line %-4u %-32s (%s part)\n", line, source[line - 1].c_str(), STAGE_NAMES[s]);
+                std::printf("line %-4u %-32s (%s part)\n", line, source[line - 1].c_str(), names[s]);
             } else {
                 std::printf("line %-4u %s\n", line, source[line - 1].c_str());
             }
         }
 
         if (!stage.entries.empty()) {
-            std::printf("%s switch table:\n", STAGE_NAMES[s]);
+            std::printf("%s switch table:\n", names[s]);
             for (const microassembler::Entry& entry : stage.entries) {
                 std::printf("  %-5s -> µ%u\n", mnemonic_of(entry.opcode).c_str(), entry.address);
             }
@@ -65,13 +67,14 @@ void print_stages(const microassembler::Microprogram& program, const std::vector
     }
 }
 
-// Usage: risc_masm [--stages] <microcode.masm>
+// Usage: risc_masm [--stages | --stages4] <microcode.masm>
 // Prints the microprogram memory contents, the switch table, and any warnings.
-// With --stages it also prints the six pipeline stages' microprograms.
+// With --stages it also prints the six pipeline stages' microprograms, with --stages4 the four stages'.
 int main(int argc, char* argv[]) {
-    bool stages = argc == 3 && std::string(argv[1]) == "--stages";
-    if (argc != 2 && !stages) {
-        std::cerr << "Usage: risc_masm [--stages] <microcode.masm>\n";
+    bool six_stages = argc == 3 && std::string(argv[1]) == "--stages";
+    bool four_stages = argc == 3 && std::string(argv[1]) == "--stages4";
+    if (argc != 2 && !six_stages && !four_stages) {
+        std::cerr << "Usage: risc_masm [--stages | --stages4] <microcode.masm>\n";
         return 1;
     }
     std::string path = argv[argc - 1];
@@ -97,8 +100,15 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        if (stages) {
-            print_stages(program, read_source_lines(path));
+        if (six_stages) {
+            std::array<microassembler::StageMicroprogram, six_stage_micro::NUM_STAGES> stages =
+                microassembler::split(program);
+            print_stages(stages.data(), six_stage_micro::NUM_STAGES, SIX_STAGE_NAMES, read_source_lines(path));
+        }
+        if (four_stages) {
+            std::array<microassembler::StageMicroprogram, four_stage_micro::NUM_STAGES> stages =
+                microassembler::split_four(program);
+            print_stages(stages.data(), four_stage_micro::NUM_STAGES, FOUR_STAGE_NAMES, read_source_lines(path));
         }
         return 0;
     } catch (const std::exception& error) {

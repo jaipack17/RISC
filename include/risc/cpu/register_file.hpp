@@ -4,6 +4,7 @@
 
 #include "risc/isa/isa_config.hpp"
 #include "risc/isa/machine_config.hpp"
+#include "risc/memory/stack_guard.hpp"
 
 namespace risc::cpu {
 
@@ -46,9 +47,12 @@ public:
         read_port2.data = regs[read_port2.address];
     }
 
-    // Store D into register A, only if E is set
+    // Store D into register A, only if E is set. Throws StackOverflow / StackUnderflow if sp would leave the stack.
     void write() {
         if (write_port.enable) {
+            if (write_port.address == isa::REG_SP) {
+                memory::check_stack_pointer(write_port.data);
+            }
             regs[write_port.address] = write_port.data;
         }
     }

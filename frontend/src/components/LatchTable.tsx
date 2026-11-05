@@ -1,15 +1,7 @@
 import type { CpuState, Packet } from "../types";
-import { hex } from "../types";
+import { hex, latchList } from "../types";
 
 // The instruction packet in every latch, field by field
-const COLUMNS: [string, (s: CpuState) => Packet][] = [
-  ["IF (building)", (s) => s.latches.fetched],
-  ["IF/OF1", (s) => s.latches.ifOf1],
-  ["OF1/OF2", (s) => s.latches.of1Of2],
-  ["OF2/EX", (s) => s.latches.of2Ex],
-  ["EX/MA", (s) => s.latches.exMa],
-  ["MA/RW", (s) => s.latches.maRw],
-];
 
 const FIELDS: [string, (p: Packet) => string][] = [
   ["instruction", (p) => (p.hasException ? p.exception : p.assembly)],
@@ -28,14 +20,15 @@ const FIELDS: [string, (p: Packet) => string][] = [
 ];
 
 export default function LatchTable({ state }: { state: CpuState }) {
-  const packets = COLUMNS.map(([, get]) => get(state));
+  const columns = [{ name: "IF (building)", packet: state.latches.fetched }, ...latchList(state)];
+  const packets = columns.map((c) => c.packet);
   return (
     <div className="pipeline-scroll">
       <table className="latches">
         <thead>
           <tr>
             <th className="left" />
-            {COLUMNS.map(([name], i) => (
+            {columns.map(({ name }, i) => (
               <th key={name}>
                 {name}
                 <div className="dim small">{packets[i].bubble ? "bubble" : "#" + packets[i].id}</div>

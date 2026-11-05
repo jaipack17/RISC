@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { CpuState, ProgramInfo } from "../types";
-import { STAGE_NAMES, stagePacket } from "../types";
+import { stageNames, stagePacket } from "../types";
 
 // One stage's microprogram (the sections the splitter made from vertical.masm),
 // with the microinstruction it just ran and the one its µpc points at
 export default function MicrocodePanel({ program, state }: { program: ProgramInfo; state: CpuState }) {
-  const [stage, setStage] = useState(1);
+  const [chosen, setStage] = useState(1);
+  const names = stageNames(state.processor);
+  const stage = Math.min(chosen, names.length - 1); // the four-stage processor has fewer tabs
   const current = useRef<HTMLTableRowElement | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
   const st = state.stages[stage];
@@ -30,7 +32,7 @@ export default function MicrocodePanel({ program, state }: { program: ProgramInf
   return (
     <div>
       <div className="tabs">
-        {STAGE_NAMES.map((name, i) => (
+        {names.map((name, i) => (
           <button key={name} className={i === stage ? "selected" : ""} onClick={() => setStage(i)}>
             {name}
             {state.stages[i].ran && <span className="dot" />}
@@ -66,7 +68,7 @@ export default function MicrocodePanel({ program, state }: { program: ProgramInf
                   <td className="dim">{w.sourceLine || ""}</td>
                   <td className="left mono">
                     {w.text}
-                    {w.part && <span className="tag">{STAGE_NAMES[stage]} part</span>}
+                    {w.part && <span className="tag">{names[stage]} part</span>}
                   </td>
                 </tr>
               );

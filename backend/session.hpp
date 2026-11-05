@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,7 @@ private:
     std::uint64_t beat_fetch_count = 0;
     std::uint64_t beat_taken = 0;
     std::vector<BeatRecord> beat_log;
+    std::set<isa::Word> return_slots; // stack words whose last store came from ra, for the stack view
 
     void restart();
     void open_beat();

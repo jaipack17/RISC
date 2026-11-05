@@ -1,6 +1,36 @@
-import { useEffect, useRef, useState } from "react";
-import type { CpuState, Packet, ProgramInfo, StageState } from "../types";
-import { STAGE_NAMES, hex, stagePacket } from "../types";
+import type { CpuState, Packet, ProgramInfo } from "../types";
+import { STAGE_NAMES, hex, stageNames, stagePacket } from "../types";
+import type { SlotSpec } from "./diagram";
+import {
+  BRANCH_Y,
+  BUS_H,
+  BUS_Y,
+  CTRL_H,
+  CTRL_Y,
+  H,
+  MEM_H,
+  MEM_Y,
+  Markers,
+  SLOT_H,
+  SLOT_Y,
+  STAGE_H,
+  STAGE_Y,
+  Slot,
+  TOKEN_H,
+  TOKEN_Y,
+  UC_H,
+  UC_Y,
+  UNIT_Y,
+  Unit,
+  WB_Y,
+  Wire,
+  busText,
+  instructionText,
+  short,
+  slotGeometry as placeSlots,
+  tokenText,
+  useGhosts,
+} from "./diagram";
 
 // Block diagram of the six-stage pipelined microprogrammed processor, drawn in the style of
 // Sarangi's figures 9.22 (microprogrammed data path) and 10.17 (pipeline with interlocks):
@@ -15,23 +45,6 @@ const GAP = 44; // space between stages, the latch sits in the middle
 const LEFT = 24;
 const W = LEFT * 2 + 6 * SW + 5 * GAP;
 
-const CTRL_Y = 14; // beat controller
-const CTRL_H = 40;
-const UC_Y = 92; // µcontrol units
-const UC_H = 62;
-const BRANCH_Y = 178; // branch feedback wire
-const STAGE_Y = 196; // stage frames
-const STAGE_H = 300;
-const BUS_Y = STAGE_Y + 92;
-const BUS_H = 16;
-const SLOT_Y = BUS_Y + BUS_H + 34;
-const SLOT_H = 32;
-const UNIT_Y = SLOT_Y + SLOT_H + 26;
-const MEM_Y = STAGE_Y + STAGE_H + 46; // memories and register file
-const MEM_H = 92;
-const WB_Y = MEM_Y + MEM_H + 26; // write-back wire
-const H = WB_Y + 18;
-
 function sx(i: number) {
   return LEFT + i * (SW + GAP);
 }
@@ -40,68 +53,9 @@ function latchX(i: number) {
   return sx(i) + SW + GAP / 2 - 9;
 }
 
-function short(value: number): string {
-  const v = value >>> 0;
-  return v <= 0xffff ? hex(v, 4) : hex(v, 8);
-}
-
-// Where the registers of a stage sit on its bus
+// Where the registers of stage i sit on its bus
 function slotGeometry(i: number, count: number) {
-  const w = Math.min(64, (SW - 20 - (count - 1) * 6) / count);
-  const total = count * w + (count - 1) * 6;
-  return { x0: sx(i) + (SW - total) / 2, w };
-}
-
-// ---- small drawing pieces ----
-
-function Wire({ d, on, kind = "data", flow = true }: { d: string; on: boolean; kind?: string; flow?: boolean }) {
-  return <path d={d} className={`w w-${kind}${on ? " on" : ""}${on && flow ? " flow" : ""}`} />;
-}
-
-interface SlotSpec {
-  name: string; // the microcode register name, e.g. "regSrc"
-  label?: string;
-  value: string;
-}
-
-// A register on a stage's local bus, like the small boxes on the shared bus in Fig 9.22
-function Slot({ x, w, spec, read, written }: { x: number; w: number; spec: SlotSpec; read: boolean; written: boolean }) {
-  return (
-    <g className={"slot" + (read ? " read" : "") + (written ? " written" : "")}>
-      <rect x={x} y={SLOT_Y} width={w} height={SLOT_H} />
-      <text x={x + w / 2} y={SLOT_Y + 13} textAnchor="middle" className="slot-name">
-        {spec.label ?? spec.name}
-      </text>
-      <text x={x + w / 2} y={SLOT_Y + 26} textAnchor="middle" className="slot-value">
-        {spec.value}
-      </text>
-    </g>
-  );
-}
-
-function Unit({ x, y, w, h, title, lines, on, kind = "unit" }: {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  title: string;
-  lines?: string[];
-  on: boolean;
-  kind?: string;
-}) {
-  return (
-    <g className={`${kind}${on ? " on" : ""}`}>
-      <rect x={x} y={y} width={w} height={h} />
-      <text x={x + w / 2} y={y + 16} textAnchor="middle" className="unit-title">
-        {title}
-      </text>
-      {(lines ?? []).map((line, i) => (
-        <text key={i} x={x + w / 2} y={y + 31 + i * 13} textAnchor="middle" className="unit-line">
-          {line}
-        </text>
-      ))}
-    </g>
-  );
+  return placeSlots(sx(i), SW, count);
 }
 
 // ---- what each stage shows ----
@@ -148,115 +102,15 @@ function slotsFor(state: CpuState, i: number, p: Packet): SlotSpec[] {
   }
 }
 
-// The text on a stage's local bus for the microinstruction it just ran
-function busText(st: StageState): string {
-  if (!st.ran) {
-    return "";
-  }
-  const s = st.signals;
-  const parts: string[] = [];
-  if (s.loadIR) {
-    parts.push("ir ← mem[pc]");
-  }
-  if (s.decode) {
-    parts.push("decode ir");
-  }
-  if (s.transfer) {
-    let from = s.src;
-    if (s.mux === "immediate") {
-      from = String(s.imm);
-    } else if (s.mux === "microAdder") {
-      from = `${s.src}+${s.imm}`;
-    }
-    if (s.dest === "") {
-      parts.push(`${from} = ${s.imm} ? ${st.isMBranch ? "jump" : "no"}`);
-    } else {
-      parts.push(`${s.dest} ← ${from} (${short(st.readBus)})`);
-    }
-  }
-  if (s.args !== "") {
-    parts.push(`<${s.args}>`);
-  }
-  return parts.join("   ");
-}
-
-function instructionText(state: CpuState, i: number, p: Packet): string {
-  if (i === 0 && !state.beat.inProgress) {
-    return state.status === "running" ? `next: fetch ${hex(state.units.fetch.pc)}` : "";
-  }
-  if (p.bubble) {
-    return "bubble";
-  }
-  if (p.hasException) {
-    return `${hex(p.currentPc)}  ${p.exception}`;
-  }
-  return `#${p.id}  ${p.assembly}`;
-}
-
-const TOKEN_Y = STAGE_Y + 120;
-const TOKEN_H = 40;
-
-// An instruction that just left the pipeline: it finished RW, or a taken branch flushed it
-interface Ghost {
-  id: number;
-  stage: number;
-  text: string;
-  kind: "retired" | "flushed";
-}
-
-// Instruction id -> the stage it is in
-function positions(state: CpuState): Map<number, number> {
-  const map = new Map<number, number>();
-  for (let i = 0; i < STAGE_NAMES.length; i++) {
-    const p = stagePacket(state, i);
-    if (!p.bubble && p.id > 0) {
-      map.set(p.id, i);
-    }
-  }
-  return map;
-}
-
-function tokenText(p: Packet): string {
-  if (p.hasException) {
-    return `${hex(p.currentPc)} ${p.exception}`;
-  }
-  return p.assembly;
-}
-
 export default function Datapath({ state, program, blackBox }: { state: CpuState; program: ProgramInfo; blackBox: boolean }) {
   const b = state.beat;
-  const stallAt = b.inProgress && b.stall ? STAGE_NAMES.indexOf(b.stallStage) : -1;
+  const stallAt = b.inProgress && b.stall ? stageNames(state.processor).indexOf(b.stallStage) : -1;
   const stage = (i: number) => state.stages[i];
   const ran = (i: number) => stage(i).ran;
   const argsUnit = (i: number) => (ran(i) ? stage(i).signals.argsUnit : "");
   const args = (i: number) => (ran(i) ? stage(i).signals.args : "");
 
-  const previous = useRef<{ state: CpuState; where: Map<number, number> } | null>(null);
-  const [ghosts, setGhosts] = useState<Ghost[]>([]);
-
-  // Find the instructions that left since the last update, to animate them out
-  useEffect(() => {
-    const where = positions(state);
-    const before = previous.current;
-    previous.current = { state, where };
-    if (!before || state.counters.microcycles < before.state.counters.microcycles) {
-      setGhosts([]); // reset or a new program
-      return;
-    }
-    const gone: Ghost[] = [];
-    before.where.forEach((stageIndex, id) => {
-      if (!where.has(id)) {
-        const p = stagePacket(before.state, stageIndex);
-        const kind = stageIndex === STAGE_NAMES.length - 1 ? "retired" : "flushed";
-        gone.push({ id, stage: stageIndex, text: tokenText(p), kind });
-      }
-    });
-    if (gone.length > 0) {
-      setGhosts(gone);
-      const timer = setTimeout(() => setGhosts([]), 900);
-      return () => clearTimeout(timer);
-    }
-  }, [state]);
+  const ghosts = useGhosts(state);
 
   // Wires to the memories and the register file start at the registers, or at the bottom of a black box
   const portY = blackBox ? STAGE_Y + STAGE_H : SLOT_Y + SLOT_H;
@@ -298,13 +152,7 @@ export default function Datapath({ state, program, blackBox }: { state: CpuState
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className={"dp" + (blackBox ? " blackbox" : "")}>
-      <defs>
-        {["data", "feedback", "control"].map((k) => (
-          <marker key={k} id={"head-" + k} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-            <path d="M0 0 L10 5 L0 10 z" className={"head head-" + k} />
-          </marker>
-        ))}
-      </defs>
+      <Markers />
 
       {/* beat controller and interlock unit (Fig 10.17's Data-lock / Branch-lock units) */}
       <g className={"controller" + (stallAt >= 0 || branch ? " on" : "")}>

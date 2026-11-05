@@ -4,6 +4,7 @@
 
 #include "risc/isa/isa_config.hpp"
 #include "risc/isa/machine_config.hpp"
+#include "risc/memory/stack_guard.hpp"
 
 namespace risc::six_stage_micro {
 
@@ -50,9 +51,13 @@ public:
         regVal2 = regs[readSrc2 % isa::NUM_REGS];
     }
 
-    // <write> on RW's bus
+    // <write> on RW's bus. Throws StackOverflow / StackUnderflow if sp would leave the stack.
     void write() {
-        regs[writeSrc % isa::NUM_REGS] = regData;
+        unsigned index = writeSrc % isa::NUM_REGS;
+        if (index == isa::REG_SP) {
+            memory::check_stack_pointer(regData);
+        }
+        regs[index] = regData;
     }
 
     // For the debugger and visualizer

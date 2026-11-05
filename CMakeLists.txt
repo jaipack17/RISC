@@ -28,7 +28,8 @@ target_link_libraries(risc_assembler PUBLIC risc_isa)
 add_executable(risc_asm src/assembler_main.cpp)
 target_link_libraries(risc_asm PRIVATE risc_assembler)
 
-add_library(risc_microassembler STATIC src/microassembler/microassembler.cpp src/microassembler/splitter.cpp)
+add_library(risc_microassembler STATIC src/microassembler/microassembler.cpp src/microassembler/splitter.cpp
+            src/microassembler/four_stage_splitter.cpp)
 target_link_libraries(risc_microassembler PUBLIC risc_isa)
 
 add_executable(risc_masm src/microassembler_main.cpp)
@@ -42,6 +43,9 @@ target_link_libraries(risc_micro_run PRIVATE risc_assembler risc_microassembler)
 
 add_executable(risc_6stage_run src/six_stage_main.cpp)
 target_link_libraries(risc_6stage_run PRIVATE risc_assembler risc_microassembler)
+
+add_executable(risc_4stage_run src/four_stage_main.cpp)
+target_link_libraries(risc_4stage_run PRIVATE risc_assembler risc_microassembler)
 
 add_library(risc_micro_visualizer STATIC src/visualizer/micro_visualizer.cpp)
 target_link_libraries(risc_micro_visualizer PUBLIC risc_visualizer risc_microassembler)

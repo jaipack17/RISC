@@ -1,6 +1,6 @@
-import type { CpuState, ProgramInfo } from "./types";
+import type { BenchmarkInfo, CompareResult, CpuState, Processor, ProgramInfo } from "./types";
 
-// Calls to the C++ backend (backend/server.cpp)
+// Calls to the C++ backend (backend/server.cpp). The six-stage processor answers unless processor is "four".
 
 async function request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
   const response = await fetch("/api" + path, {
@@ -15,34 +15,49 @@ async function request<T>(method: "GET" | "POST", path: string, body?: unknown):
   return data as T;
 }
 
-export function getProgram(): Promise<ProgramInfo> {
-  return request("GET", "/program");
+export function getProgram(processor: Processor): Promise<ProgramInfo> {
+  return request("GET", "/program?processor=" + processor);
 }
 
-export function getState(): Promise<CpuState> {
-  return request("GET", "/state");
+export function getState(processor: Processor): Promise<CpuState> {
+  return request("GET", "/state?processor=" + processor);
 }
 
 export function listPrograms(): Promise<string[]> {
   return request("GET", "/programs");
 }
 
-export function loadProgramFile(program: string): Promise<ProgramInfo> {
-  return request("POST", "/load", { program });
+// Both processors get the program
+export function loadProgramFile(processor: Processor, program: string): Promise<ProgramInfo> {
+  return request("POST", "/load?processor=" + processor, { program });
 }
 
-export function loadProgramSource(name: string, source: string): Promise<ProgramInfo> {
-  return request("POST", "/load", { name, source });
+export function loadProgramSource(processor: Processor, name: string, source: string): Promise<ProgramInfo> {
+  return request("POST", "/load?processor=" + processor, { name, source });
 }
 
-export function reset(): Promise<CpuState> {
-  return request("POST", "/reset");
+export function reset(processor: Processor): Promise<CpuState> {
+  return request("POST", "/reset?processor=" + processor);
 }
 
-export function step(unit: "microcycle" | "beat", count = 1): Promise<CpuState> {
-  return request("POST", "/step", { unit, count });
+export function step(processor: Processor, unit: "microcycle" | "beat", count = 1): Promise<CpuState> {
+  return request("POST", "/step?processor=" + processor, { unit, count });
 }
 
-export function run(): Promise<CpuState> {
-  return request("POST", "/run");
+export function run(processor: Processor): Promise<CpuState> {
+  return request("POST", "/run?processor=" + processor);
+}
+
+export function listBenchmarks(): Promise<BenchmarkInfo[]> {
+  return request("GET", "/benchmarks");
+}
+
+// A program from programs/ on fresh 4-stage, 6-stage and sequential processors, with the pipelines' timelines
+export function compareProgram(program: string): Promise<CompareResult> {
+  return request("POST", "/compare", { program });
+}
+
+// Every benchmark on the three processors (no timelines)
+export function runBenchmark(): Promise<CompareResult[]> {
+  return request("GET", "/benchmark");
 }

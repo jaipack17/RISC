@@ -3,6 +3,7 @@ import type { CpuState, ProgramInfo } from "../types";
 import { hex } from "../types";
 
 interface Props {
+  pages: React.ReactNode; // the Simulator | Compare switch
   program: ProgramInfo | null;
   programs: string[];
   state: CpuState | null;
@@ -43,7 +44,7 @@ export default function Toolbar(props: Props) {
   return (
     <header className="toolbar">
       <div className="toolbar-row">
-        <span className="title">RISC201 · 6-stage microprogrammed pipeline</span>
+        <span className="title">RISC201 · {state?.processor === "four" ? "4" : "6"}-stage microprogrammed pipeline</span>
         <select value={program?.name ?? ""} onChange={(e) => props.onLoad(e.target.value)}>
           {program && !programs.includes(program.name) && <option value={program.name}>{program.name}</option>}
           {programs.map((name) => (
@@ -84,6 +85,7 @@ export default function Toolbar(props: Props) {
         <button onClick={props.onRun} disabled={!running}>
           Run to end
         </button>
+        {props.pages}
       </div>
       {state && (
         <div className="toolbar-row counters">

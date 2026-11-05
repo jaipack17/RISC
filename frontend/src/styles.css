@@ -28,7 +28,104 @@
 
   --mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --frame-on: #555;
+  --bus-on: #12363b;
+  --unit-on: #2b1c10;
+  --branch-on: #2a0812;
+  --latch-on: #0f3a1f;
+  --feedback-dim: #3a0f1a;
+  --control-dim: #142046;
+  --hover: #0f0f0f;
+
+  /* stage colours for filled cells and black-box stages (black text on them, both themes) */
+  --tone-reg: #e3a87c;
+  --tone-bus: #5fb4c0;
+  --tone-of2: #7fa6d8;
+  --tone-uc: #b6e04a;
+  --tone-mem: #e2879b;
+  --tone-latch: #4fd17a;
+
+  /* compare page: light blue, light green, light pink. The green is lighter and the pink deeper
+     so they stay apart for red-green colour blindness (dataviz palette validator, CVD ΔE 14) */
+  --seg-work: #8ec5ff;
+  --seg-stall: #b5f0c4;
+  --seg-flush: #ee8fb4;
+
   color-scheme: dark;
+}
+
+/* Light theme: the same layout and meanings, darker strokes for a white surface */
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --panel: #f7f7f7;
+  --line: #dadada;
+  --line-strong: #a3a3a3;
+  --text: #161616;
+  --dim: #555555;
+  --faint: #8f8f8f;
+
+  --bus: #13707c;
+  --bus-fill: #d3ecf0;
+  --reg: #9a4f18;
+  --reg-fill: #f7e0cc;
+  --mem: #ad2a4b;
+  --mem-fill: #f7d8e1;
+  --latch: #12793a;
+  --latch-fill: #d0eedb;
+  --uc: #557300;
+  --uc-fill: #e6efc6;
+  --feedback: #c8103f;
+  --control: #1f4cc4;
+  --active: #000000;
+  --wait: #a35f00;
+  --fault: #c81818;
+
+  --frame-on: #161616;
+  --bus-on: #9fd6df;
+  --unit-on: #efc39c;
+  --branch-on: #f3b2c2;
+  --latch-on: #9edcb4;
+  --feedback-dim: #e9a3b6;
+  --control-dim: #a9bcef;
+  --hover: #ececec;
+
+  /* a little deeper than in the dark theme, so the filled stages stand out from white */
+  --tone-reg: #df9560;
+  --tone-bus: #47a6b4;
+  --tone-of2: #6a94cf;
+  --tone-uc: #9fcf30;
+  --tone-mem: #dc6f8a;
+  --tone-latch: #36bd64;
+
+  --seg-work: #8ec5ff;
+  --seg-stall: #b5f0c4;
+  --seg-flush: #ee8fb4;
+
+  color-scheme: light;
+}
+
+/* On white, dimmed outlines vanish: idle boxes keep full-strength outlines, and an active one
+   is marked by its thicker stroke and stronger fill instead */
+:root[data-theme="light"] .dp .bus rect,
+:root[data-theme="light"] .dp .slot rect,
+:root[data-theme="light"] .dp .unit rect,
+:root[data-theme="light"] .dp .memory rect,
+:root[data-theme="light"] .dp .flags rect,
+:root[data-theme="light"] .dp .ucontrol rect,
+:root[data-theme="light"] .dp .controller rect,
+:root[data-theme="light"] .dp .latch rect {
+  stroke-opacity: 0.9;
+}
+
+:root[data-theme="light"] .dp .ucontrol.on rect,
+:root[data-theme="light"] .dp .controller.on rect,
+:root[data-theme="light"] .dp .latch.full rect,
+:root[data-theme="light"] .dp .bus.on rect {
+  stroke-width: 2;
+}
+
+:root[data-theme="light"] .dp .box.empty rect {
+  opacity: 0.45;
 }
 
 * {
@@ -286,7 +383,7 @@ select option {
 }
 
 .dp .stage.on {
-  stroke: #555;
+  stroke: var(--frame-on);
 }
 
 .dp .stage.wait {
@@ -324,7 +421,7 @@ select option {
 }
 
 .dp .bus.on rect {
-  fill: #12363b;
+  fill: var(--bus-on);
   stroke-opacity: 1;
 }
 
@@ -368,7 +465,7 @@ select option {
 }
 
 .dp .slot.written text {
-  fill: #000;
+  fill: var(--bg);
 }
 
 /* units, memories, register file */
@@ -381,7 +478,7 @@ select option {
 .dp .unit.on rect {
   stroke-opacity: 1;
   stroke-width: 1.5;
-  fill: #2b1c10;
+  fill: var(--unit-on);
 }
 
 .dp .memory rect {
@@ -421,7 +518,7 @@ select option {
 
 .dp .branchunit.on rect {
   stroke: var(--feedback);
-  fill: #2a0812;
+  fill: var(--branch-on);
 }
 
 /* µcontrol */
@@ -468,7 +565,7 @@ select option {
 }
 
 .dp .latch.full rect {
-  fill: #0f3a1f;
+  fill: var(--latch-on);
   stroke-opacity: 1;
 }
 
@@ -509,7 +606,7 @@ select option {
 }
 
 .dp .w-feedback {
-  stroke: #3a0f1a;
+  stroke: var(--feedback-dim);
   stroke-width: 4;
 }
 
@@ -518,7 +615,7 @@ select option {
 }
 
 .dp .w-control {
-  stroke: #142046;
+  stroke: var(--control-dim);
   stroke-dasharray: 5 4;
 }
 
@@ -591,7 +688,7 @@ thead th {
 }
 
 .pipeline td.cell {
-  border: 1px solid #000;
+  border: 1px solid var(--bg);
   font-size: 10px;
   color: #000;
   font-weight: 600;
@@ -631,22 +728,28 @@ thead th {
 
 /* one colour per stage */
 .stage-IF {
-  background: var(--reg);
+  background: var(--tone-reg);
 }
 .stage-OF1 {
-  background: var(--bus);
+  background: var(--tone-bus);
 }
 .stage-OF2 {
-  background: #7fa6d8;
+  background: var(--tone-of2);
 }
 .stage-EX {
-  background: var(--uc);
+  background: var(--tone-uc);
 }
 .stage-MA {
-  background: var(--mem);
+  background: var(--tone-mem);
 }
 .stage-RW {
-  background: var(--latch);
+  background: var(--tone-latch);
+}
+.stage-OF {
+  background: var(--tone-bus);
+}
+.stage-MW {
+  background: var(--tone-mem);
 }
 
 .tag {
@@ -685,16 +788,16 @@ thead th {
 }
 
 .listing tr.current td {
-  background: #0f0f0f;
+  background: var(--hover);
 }
 
 .microcode tr.next td {
-  background: #0f0f0f;
+  background: var(--hover);
 }
 
 .microcode tr.ran td {
   background: var(--text);
-  color: #000;
+  color: var(--bg);
 }
 
 .microcode tr.end td {
@@ -704,7 +807,7 @@ thead th {
 
 .registers tr.changed td {
   color: var(--active);
-  background: #111;
+  background: var(--hover);
 }
 
 .tabs {
@@ -745,6 +848,11 @@ p {
   margin: 0;
 }
 
+.toggles {
+  display: flex;
+  gap: 12px;
+}
+
 .toggle {
   display: flex;
 }
@@ -760,22 +868,28 @@ p {
 }
 
 .dp .box.s-IF rect {
-  fill: var(--reg);
+  fill: var(--tone-reg);
 }
 .dp .box.s-OF1 rect {
-  fill: var(--bus);
+  fill: var(--tone-bus);
 }
 .dp .box.s-OF2 rect {
-  fill: #7fa6d8;
+  fill: var(--tone-of2);
 }
 .dp .box.s-EX rect {
-  fill: var(--uc);
+  fill: var(--tone-uc);
 }
 .dp .box.s-MA rect {
-  fill: var(--mem);
+  fill: var(--tone-mem);
 }
 .dp .box.s-RW rect {
-  fill: var(--latch);
+  fill: var(--tone-latch);
+}
+.dp .box.s-OF rect {
+  fill: var(--tone-bus);
+}
+.dp .box.s-MW rect {
+  fill: var(--tone-mem);
 }
 
 .dp .box.empty rect {
@@ -819,7 +933,7 @@ p {
 }
 
 .dp .token rect {
-  fill: #000;
+  fill: var(--bg);
 }
 
 .dp .token.on rect {
@@ -879,4 +993,341 @@ p {
     transform: translate(0, 30px);
     opacity: 0;
   }
+}
+
+.side-wide {
+  flex: 0 1 470px;
+}
+
+.pages {
+  display: flex;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.macro-tag {
+  background: transparent;
+  color: var(--dim);
+  border: 1px solid var(--line-strong);
+  font-weight: 400;
+}
+
+/* ---- stack panel: a frame diagram, top of memory first ---- */
+
+.stack-head {
+  display: flex;
+  gap: 16px;
+  font: 11px var(--mono);
+  color: var(--dim);
+  margin-bottom: 6px;
+}
+
+.stack-head b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.stack-motion {
+  color: var(--wait);
+}
+
+.stack-bar {
+  height: 4px;
+  background: var(--line);
+  margin-bottom: 4px;
+}
+
+.stack-bar div {
+  height: 100%;
+  background: var(--reg);
+}
+
+.stack-bounds {
+  margin-bottom: 8px;
+}
+
+.stack-table td {
+  padding: 2px 6px;
+  border-left: 1px solid var(--line);
+}
+
+.stack-table td:first-child {
+  border-left: none;
+}
+
+.stack-table tr.frame-0 td.mono {
+  background: var(--reg-fill);
+}
+
+.stack-table tr.frame-1 td.mono {
+  background: var(--bus-fill);
+}
+
+.stack-table tr.free td {
+  color: var(--faint);
+}
+
+.stack-table tr.changed td.mono {
+  color: var(--active);
+  outline: 1px solid var(--reg);
+  outline-offset: -1px;
+}
+
+.stack-table tr.top td {
+  border-top: 1px solid var(--reg);
+}
+
+.stack-table .sp-mark {
+  color: var(--reg);
+  border-left: none;
+}
+
+.stack-table .note {
+  color: var(--feedback);
+}
+
+.stack-table .frame {
+  color: var(--dim);
+}
+
+/* ---- compare page: a short report in one column ---- */
+
+.report {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 36px 24px 80px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.report h1 {
+  margin: 0 0 12px;
+  font: 600 22px/1.3 var(--sans);
+  color: var(--active);
+}
+
+.report .lead {
+  margin: 0 0 8px;
+  color: var(--dim);
+  max-width: 760px;
+}
+
+.report section {
+  margin-top: 44px;
+}
+
+.report section > p {
+  max-width: 760px;
+  color: var(--dim);
+  margin: 0 0 16px;
+}
+
+.report h2 {
+  margin-bottom: 12px;
+}
+
+.report h3 {
+  margin: 24px 0 8px;
+  font: 500 12px var(--mono);
+}
+
+.report select {
+  margin-bottom: 12px;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: var(--bg);
+}
+
+.report button.show {
+  margin-top: 18px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 12px;
+  font: 12px var(--sans);
+  color: var(--dim);
+}
+
+.legend i,
+.tip-row i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 7px;
+  vertical-align: -1px;
+}
+
+.seg-work {
+  background: var(--seg-work);
+}
+
+.seg-stall {
+  background: var(--seg-stall);
+}
+
+.seg-flush {
+  background: var(--seg-flush);
+}
+
+/* on white the pastel bars need an edge */
+:root[data-theme="light"] .seg,
+:root[data-theme="light"] .legend i {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+/* where the time goes: one bar per pipeline, with the arithmetic beside it */
+
+.breakdown {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.breakdown-head,
+.breakdown-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 70px;
+  align-items: center;
+  column-gap: 16px;
+}
+
+.breakdown-head {
+  font: 11px var(--sans);
+  color: var(--dim);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.breakdown-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.breakdown-name {
+  font: 500 12px var(--mono);
+  color: var(--text);
+}
+
+.bar-track {
+  display: flex;
+  height: 22px;
+  gap: 2px;
+}
+
+.seg {
+  display: block;
+  height: 100%;
+  overflow: hidden;
+  text-indent: 6px; /* unlike padding, adds no width to thin segments */
+  font: 11px/22px var(--mono);
+  color: #000; /* black reads on all three segment colours, in both themes */
+}
+
+.seg:hover {
+  opacity: 0.8;
+}
+
+.breakdown .num {
+  text-align: right;
+  font-family: var(--mono);
+}
+
+.breakdown-row .num {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.breakdown-row .num.strong {
+  color: var(--active);
+  font-size: 14px;
+}
+
+/* every program: one dot each */
+
+.dots {
+  position: relative;
+}
+
+.dots svg {
+  display: block;
+  overflow: visible;
+}
+
+.dots .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.dots .reference {
+  stroke: var(--dim);
+  stroke-width: 1;
+}
+
+.dots .axis {
+  font: 10px var(--mono);
+  fill: var(--dim);
+}
+
+.dots .row-label {
+  font: 12px var(--sans);
+  fill: var(--text);
+}
+
+.dots .dot {
+  cursor: pointer;
+}
+
+.dots .hit {
+  fill: transparent;
+}
+
+.dots .mark {
+  fill: var(--text);
+  fill-opacity: 0.75;
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+
+.dots .dot:hover .mark {
+  fill-opacity: 1;
+}
+
+.dots .dot.selected .mark {
+  fill: var(--seg-flush);
+  fill-opacity: 1;
+}
+
+.chart-tip {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  padding: 7px 10px;
+  font: 12px var(--sans);
+  white-space: nowrap;
+}
+
+.tip-row b {
+  color: var(--active);
+  font: 500 13px var(--mono);
+  margin-right: 4px;
+}
+
+.tip-note {
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+/* the space-time diagrams under "one program" */
+
+.spacetime tr.beat-cycles th {
+  font-size: 10px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.spacetime tr.beat-cycles th.stalled {
+  color: var(--wait);
 }

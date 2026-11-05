@@ -26,6 +26,8 @@ private:
     bool in_beat = false; // a beat has started and not finished yet
     bool saved_flagE = false; // the flags at the start of the beat
     bool saved_flagGT = false;
+    bool previous_flagE = false; // the flags at the start of the beat before
+    bool previous_flagGT = false;
 
     bool all_done() const {
         for (const StageMicroControlUnit& stage : stages) {
@@ -85,7 +87,8 @@ private:
     }
 
     // A stage raised an exception: it is kept in the instruction's packet, and the rest of the
-    // stage's section does not run. It is reported when the instruction reaches RW.
+    // stage's section does not run. It is reported when the instruction reaches RW, or at the
+    // end of the beat if RW raised it.
     void record_exception(StageMicroControlUnit& stage, const CpuException& e) {
         InstructionPacket& p = datapath.packet_of(stage.stage);
         if (stage.stage == Stage::IF) {
@@ -101,6 +104,9 @@ private:
     // jumps to its section for the instruction in its input latch
     void start_beat() {
         datapath.branchTaken = false;
+        datapath.stored = false;
+        previous_flagE = saved_flagE;
+        previous_flagGT = saved_flagGT;
         saved_flagE = datapath.alu.flagE;
         saved_flagGT = datapath.alu.flagGT;
 
@@ -141,6 +147,28 @@ private:
     // After a taken branch, IF continues at the branch's target and the three younger instructions are flushed.
     // The instructions behind one with an exception are flushed.
     void end_beat() {
+        if (datapath.ma_rw.hasException) {
+            // RW raised it (sp would leave the stack): every older instruction has finished.
+            // Undo what the younger instructions did: MA's store in this beat, and the flags set in EX in this
+            // beat and the one before (the instruction now in MA was in EX then). Flush them and stop.
+            if (datapath.stored) {
+                memory.write_word(datapath.store_address, datapath.store_old_value);
+            }
+            datapath.alu.flagE = previous_flagE;
+            datapath.alu.flagGT = previous_flagGT;
+            datapath.fetched = bubble(BubbleReason::Flush);
+            datapath.if_of1 = bubble(BubbleReason::Flush);
+            datapath.of1_of2 = bubble(BubbleReason::Flush);
+            datapath.of2_ex = bubble(BubbleReason::Flush);
+            datapath.ex_ma = bubble(BubbleReason::Flush);
+            status = CpuStatus::Exception;
+            exception = datapath.ma_rw.exception;
+            exception_pc = datapath.ma_rw.currentPc;
+            beats++;
+            in_beat = false;
+            return;
+        }
+
         if (datapath.ex_ma.hasException) {
             // MA raised it: undo the flags of the younger instruction that ran in EX this beat
             datapath.alu.flagE = saved_flagE;
@@ -153,23 +181,23 @@ private:
         datapath.ma_rw = datapath.ex_ma;
         datapath.ex_ma = datapath.of2_ex;
         if (stall && stall_stage == Stage::OF2) {
-            datapath.of2_ex = InstructionPacket{};
+            datapath.of2_ex = bubble(BubbleReason::Stall);
         } else {
             datapath.of2_ex = datapath.of1_of2;
             if (stall && stall_stage == Stage::OF1) {
-                datapath.of1_of2 = InstructionPacket{};
+                datapath.of1_of2 = bubble(BubbleReason::Stall);
             } else {
                 datapath.of1_of2 = datapath.if_of1;
                 datapath.if_of1 = datapath.fetched;
             }
         }
-        datapath.fetched = InstructionPacket{};
+        datapath.fetched = bubble(BubbleReason::Drain);
 
         if (datapath.branchTaken) {
             datapath.fetch.pc = datapath.branchPc;
-            datapath.if_of1 = InstructionPacket{};
-            datapath.of1_of2 = InstructionPacket{};
-            datapath.of2_ex = InstructionPacket{};
+            datapath.if_of1 = bubble(BubbleReason::Flush);
+            datapath.of1_of2 = bubble(BubbleReason::Flush);
+            datapath.of2_ex = bubble(BubbleReason::Flush);
             taken_branches++;
         }
 
@@ -179,7 +207,7 @@ private:
         for (int i = 4; i >= 0; i--) {
             if (!latches[i]->bubble && latches[i]->hasException) {
                 for (int j = 0; j < i; j++) {
-                    *latches[j] = InstructionPacket{};
+                    *latches[j] = bubble(BubbleReason::Flush);
                 }
                 break;
             }
@@ -220,6 +248,10 @@ public:
             stage.reset();
         }
         in_beat = false;
+        saved_flagE = false;
+        saved_flagGT = false;
+        previous_flagE = false;
+        previous_flagGT = false;
         stall = false;
         fetching = false;
         status = CpuStatus::Running;

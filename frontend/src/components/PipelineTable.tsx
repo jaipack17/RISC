@@ -1,5 +1,5 @@
 import type { CpuState } from "../types";
-import { STAGE_NAMES, hex, stagePacket } from "../types";
+import { hex, stageNames, stagePacket } from "../types";
 
 // The classic pipeline diagram: one row per instruction (in the order they were fetched),
 // one column per beat, each cell the stage the instruction was in during that beat.
@@ -22,6 +22,7 @@ interface Row {
 
 export default function PipelineTable({ state }: { state: CpuState }) {
   const log = state.beatLog.slice(-MAX_BEATS);
+  const names = stageNames(state.processor);
   const rows = new Map<number, Row>();
 
   function mark(beat: number, stage: number, id: number, pc: number, assembly: string, waited: boolean, exception: boolean) {
@@ -33,7 +34,7 @@ export default function PipelineTable({ state }: { state: CpuState }) {
     if (assembly !== "") {
       row.assembly = assembly;
     }
-    row.cells.set(beat, { stage: STAGE_NAMES[stage], waited, exception });
+    row.cells.set(beat, { stage: names[stage], waited, exception });
     row.lastStage = Math.max(row.lastStage, stage);
   }
 
@@ -48,12 +49,12 @@ export default function PipelineTable({ state }: { state: CpuState }) {
   // The beat in progress: what each stage holds right now
   const liveBeat = state.beat.inProgress ? state.beat.number : 0;
   const inPipeline = new Set<number>();
-  for (let stage = 0; stage < STAGE_NAMES.length; stage++) {
+  for (let stage = 0; stage < names.length; stage++) {
     const p = stagePacket(state, stage);
     if (!p.bubble && p.id > 0) {
       inPipeline.add(p.id);
       if (liveBeat > 0) {
-        const waited = state.beat.stall && stage <= STAGE_NAMES.indexOf(state.beat.stallStage);
+        const waited = state.beat.stall && stage <= names.indexOf(state.beat.stallStage);
         mark(liveBeat, stage, p.id, p.currentPc, p.assembly, waited, p.hasException);
       }
     }
@@ -86,8 +87,8 @@ export default function PipelineTable({ state }: { state: CpuState }) {
         </thead>
         <tbody>
           {sorted.map((row) => {
-            // Flushed: left the pipeline without reaching RW
-            const flushed = !inPipeline.has(row.id) && row.lastStage < STAGE_NAMES.length - 1;
+            // Flushed: left the pipeline without reaching the last stage
+            const flushed = !inPipeline.has(row.id) && row.lastStage < names.length - 1;
             return (
               <tr key={row.id} className={flushed ? "flushed" : ""}>
                 <td className="left dim">{row.id}</td>

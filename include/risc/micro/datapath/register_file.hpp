@@ -5,6 +5,7 @@
 
 #include "risc/isa/isa_config.hpp"
 #include "risc/isa/machine_config.hpp"
+#include "risc/memory/stack_guard.hpp"
 
 namespace risc::micro {
 
@@ -37,6 +38,9 @@ public:
         if (op == RegisterFileOp::Read) {
             regVal = regs[index];
         } else if (op == RegisterFileOp::Write) {
+            if (index == isa::REG_SP) {
+                memory::check_stack_pointer(regData);
+            }
             regs[index] = regData;
         }
     }

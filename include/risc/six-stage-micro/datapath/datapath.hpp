@@ -157,6 +157,11 @@ public:
     bool branchTaken = false;
     isa::Word branchPc = 0;
 
+    // MA's store in this beat, so it can be undone if the older instruction in RW raises an exception
+    bool stored = false;
+    isa::Word store_address = 0;
+    isa::Word store_old_value = 0;
+
     void reset() {
         fetch.reset();
         decode.reset();
@@ -174,6 +179,9 @@ public:
         isMBranch.fill(false);
         branchTaken = false;
         branchPc = 0;
+        stored = false;
+        store_address = 0;
+        store_old_value = 0;
         fetch_count = 0;
     }
 
@@ -266,6 +274,12 @@ public:
                 }
                 break;
             case micro::UnitId::Memory:
+                if (micro::MemoryOp(opcode) == micro::MemoryOp::Store) {
+                    // read_word fails exactly when the store would, with the same exception
+                    store_old_value = memory.read_word(memory_unit.mar);
+                    store_address = memory_unit.mar;
+                    stored = true;
+                }
                 memory_unit.run(micro::MemoryOp(opcode), memory);
                 p.ldResult = memory_unit.ldResult;
                 break;

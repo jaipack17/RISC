@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "httplib.h"
+#include "compare.hpp"
+#include "four_stage_session.hpp"
 #include "nlohmann/json.hpp"
 #include "session.hpp"
 
@@ -43,15 +45,63 @@ std::string read_file(const std::string& path) {
     return buffer.str();
 }
 
-// A program name sent by the browser must be a plain file name inside programs/
-bool is_plain_asm_name(const std::string& name) {
-    if (name.empty() || name.find('/') != std::string::npos || name.find('\\') != std::string::npos) {
-        return false;
+const std::string BENCHMARKS_FOLDER = "benchmarks"; // inside programs/
+
+bool is_asm_file(const std::filesystem::directory_entry& entry) {
+    std::string name = entry.path().filename().string();
+    return entry.is_regular_file() && name.size() > 4 && name.substr(name.size() - 4) == ".asm";
+}
+
+// The .asm files under programs/, as paths relative to it (e.g. "benchmarks/alg01_bubble_sort.asm"), sorted
+std::vector<std::string> list_programs() {
+    std::vector<std::string> names;
+    if (!std::filesystem::is_directory(PROGRAMS_FOLDER)) {
+        return names;
     }
-    if (name.find("..") != std::string::npos) {
-        return false;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(PROGRAMS_FOLDER)) {
+        if (is_asm_file(entry)) {
+            names.push_back(std::filesystem::relative(entry.path(), PROGRAMS_FOLDER).generic_string());
+        }
     }
-    return name.size() > 4 && name.substr(name.size() - 4) == ".asm";
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+// A program name sent by the browser must be one of the listed files (nothing outside programs/)
+bool is_listed_program(const std::string& name) {
+    std::vector<std::string> names = list_programs();
+    return std::find(names.begin(), names.end(), name) != names.end();
+}
+
+// A benchmark's header comments: "@ title", "@ what it tests...", "@ category: x", "@ expect: ..."
+json benchmark_info(const std::string& name, const std::string& source) {
+    json j;
+    j["name"] = name;
+    j["title"] = "";
+    j["about"] = "";
+    j["category"] = "";
+    j["expect"] = "";
+    std::istringstream lines(source);
+    std::string line;
+    while (std::getline(lines, line) && line.rfind("@ ", 0) == 0) {
+        std::string text = line.substr(2);
+        if (text.rfind("category: ", 0) == 0) {
+            j["category"] = text.substr(10);
+        } else if (text.rfind("expect: ", 0) == 0) {
+            j["expect"] = text.substr(8);
+        } else if (j["title"] == "") {
+            j["title"] = text;
+        } else {
+            std::string about = j["about"].get<std::string>();
+            j["about"] = about.empty() ? text : about + " " + text;
+        }
+    }
+    return j;
+}
+
+// ?processor=four picks the four-stage processor; without it the six-stage one answers
+bool wants_four(const httplib::Request& req) {
+    return req.get_param_value("processor") == "four";
 }
 
 // Usage: risc_web [--port N] [--microcode file.masm] [--program file.asm]
@@ -74,76 +124,150 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    std::unique_ptr<web::Session> session;
+    std::unique_ptr<web::Session> session; // the six-stage processor
+    std::unique_ptr<web::FourStageSession> four_session;
+    std::unique_ptr<web::Comparer> comparer; // fresh runs of all three processors, for the Compare page
     try {
         session = std::make_unique<web::Session>(microcode_path);
+        four_session = std::make_unique<web::FourStageSession>(microcode_path);
+        comparer = std::make_unique<web::Comparer>(microcode_path);
         if (std::filesystem::exists(program_path)) {
             std::string name = std::filesystem::path(program_path).filename().string();
-            session->load(name, read_file(program_path));
+            std::string source = read_file(program_path);
+            session->load(name, source);
+            four_session->load(name, source);
         }
     } catch (const std::exception& error) {
         std::cerr << "Error: " << error.what() << '\n';
         return 1;
     }
 
-    std::mutex lock; // the server answers requests on several threads; one session
+    std::mutex lock; // the server answers requests on several threads; one session per processor
     httplib::Server server;
 
-    server.Get("/api/program", [&](const httplib::Request&, httplib::Response& res) {
+    server.Get("/api/program", [&](const httplib::Request& req, httplib::Response& res) {
         std::lock_guard<std::mutex> guard(lock);
-        send_json(res, session->program_json());
+        if (wants_four(req)) {
+            send_json(res, four_session->program_json());
+        } else {
+            send_json(res, session->program_json());
+        }
     });
 
-    server.Get("/api/state", [&](const httplib::Request&, httplib::Response& res) {
+    server.Get("/api/state", [&](const httplib::Request& req, httplib::Response& res) {
         std::lock_guard<std::mutex> guard(lock);
-        send_json(res, session->state_json());
+        if (wants_four(req)) {
+            send_json(res, four_session->state_json());
+        } else {
+            send_json(res, session->state_json());
+        }
     });
 
-    // The .asm files in programs/
+    // The .asm files under programs/
     server.Get("/api/programs", [&](const httplib::Request&, httplib::Response& res) {
-        std::vector<std::string> names;
-        if (std::filesystem::is_directory(PROGRAMS_FOLDER)) {
-            for (const auto& entry : std::filesystem::directory_iterator(PROGRAMS_FOLDER)) {
-                std::string name = entry.path().filename().string();
-                if (entry.is_regular_file() && is_plain_asm_name(name)) {
-                    names.push_back(name);
-                }
+        send_json(res, list_programs());
+    });
+
+    // The benchmark programs in programs/benchmarks/ with their header comments
+    server.Get("/api/benchmarks", [&](const httplib::Request&, httplib::Response& res) {
+        json list = json::array();
+        for (const std::string& name : list_programs()) {
+            if (name.rfind(BENCHMARKS_FOLDER + "/", 0) == 0) {
+                list.push_back(benchmark_info(name, read_file(PROGRAMS_FOLDER + "/" + name)));
             }
         }
-        std::sort(names.begin(), names.end());
-        send_json(res, names);
+        send_json(res, list);
+    });
+
+    // Body: {"program": "benchmarks/alg01_bubble_sort.asm"} or {"source": "..."}.
+    // Runs it on fresh 4-stage, 6-stage and sequential processors, with the pipelines' timelines.
+    server.Post("/api/compare", [&](const httplib::Request& req, httplib::Response& res) {
+        try {
+            json body = json::parse(req.body);
+            std::string source;
+            json info;
+            if (body.contains("program")) {
+                std::string name = body["program"].get<std::string>();
+                if (!is_listed_program(name)) {
+                    send_error(res, 400, "not a program in " + PROGRAMS_FOLDER + "/: " + name);
+                    return;
+                }
+                source = read_file(PROGRAMS_FOLDER + "/" + name);
+                info = benchmark_info(name, source);
+            } else {
+                source = body.at("source").get<std::string>();
+                info = benchmark_info("untitled.asm", source);
+            }
+            json result = comparer->compare(source, true);
+            result["program"] = info;
+            send_json(res, result);
+        } catch (const std::exception& error) {
+            send_error(res, 400, error.what());
+        }
+    });
+
+    // Every benchmark on the three processors (no timelines)
+    server.Get("/api/benchmark", [&](const httplib::Request&, httplib::Response& res) {
+        try {
+            json results = json::array();
+            for (const std::string& name : list_programs()) {
+                if (name.rfind(BENCHMARKS_FOLDER + "/", 0) != 0) {
+                    continue;
+                }
+                std::string source = read_file(PROGRAMS_FOLDER + "/" + name);
+                json result = comparer->compare(source, false);
+                result["program"] = benchmark_info(name, source);
+                results.push_back(result);
+            }
+            send_json(res, results);
+        } catch (const std::exception& error) {
+            send_error(res, 500, error.what());
+        }
     });
 
     // Body: {"program": "factorial.asm"} to load a file from programs/,
-    // or {"name": "...", "source": "..."} to load assembly text
+    // or {"name": "...", "source": "..."} to load assembly text. Both processors get the program.
     server.Post("/api/load", [&](const httplib::Request& req, httplib::Response& res) {
         std::lock_guard<std::mutex> guard(lock);
         try {
             json body = json::parse(req.body);
             if (body.contains("program")) {
                 std::string name = body["program"].get<std::string>();
-                if (!is_plain_asm_name(name)) {
+                if (!is_listed_program(name)) {
                     send_error(res, 400, "not a program in " + PROGRAMS_FOLDER + "/: " + name);
                     return;
                 }
-                session->load(name, read_file(PROGRAMS_FOLDER + "/" + name));
+                std::string source = read_file(PROGRAMS_FOLDER + "/" + name);
+                session->load(name, source);
+                four_session->load(name, source);
             } else {
                 std::string name = "untitled.asm";
                 if (body.contains("name")) {
                     name = body["name"].get<std::string>();
                 }
-                session->load(name, body.at("source").get<std::string>());
+                std::string source = body.at("source").get<std::string>();
+                session->load(name, source);
+                four_session->load(name, source);
             }
-            send_json(res, session->program_json());
+            if (wants_four(req)) {
+                send_json(res, four_session->program_json());
+            } else {
+                send_json(res, session->program_json());
+            }
         } catch (const std::exception& error) {
             send_error(res, 400, error.what());
         }
     });
 
-    server.Post("/api/reset", [&](const httplib::Request&, httplib::Response& res) {
+    server.Post("/api/reset", [&](const httplib::Request& req, httplib::Response& res) {
         std::lock_guard<std::mutex> guard(lock);
-        session->reset();
-        send_json(res, session->state_json());
+        if (wants_four(req)) {
+            four_session->reset();
+            send_json(res, four_session->state_json());
+        } else {
+            session->reset();
+            send_json(res, session->state_json());
+        }
     });
 
     // Body: {"unit": "microcycle" or "beat", "count": n}
@@ -154,23 +278,36 @@ int main(int argc, char* argv[]) {
             std::string unit = body.value("unit", "microcycle");
             int count = body.value("count", 1);
             for (int i = 0; i < count; i++) {
-                if (unit == "beat") {
+                if (wants_four(req) && unit == "beat") {
+                    four_session->step_beat();
+                } else if (wants_four(req)) {
+                    four_session->step_microcycle();
+                } else if (unit == "beat") {
                     session->step_beat();
                 } else {
                     session->step_microcycle();
                 }
             }
-            send_json(res, session->state_json());
+            if (wants_four(req)) {
+                send_json(res, four_session->state_json());
+            } else {
+                send_json(res, session->state_json());
+            }
         } catch (const std::exception& error) {
             send_error(res, 400, error.what());
         }
     });
 
     // Run until the program halts or raises an exception
-    server.Post("/api/run", [&](const httplib::Request&, httplib::Response& res) {
+    server.Post("/api/run", [&](const httplib::Request& req, httplib::Response& res) {
         std::lock_guard<std::mutex> guard(lock);
-        session->run(MAX_RUN_MICROCYCLES);
-        send_json(res, session->state_json());
+        if (wants_four(req)) {
+            four_session->run(MAX_RUN_MICROCYCLES);
+            send_json(res, four_session->state_json());
+        } else {
+            session->run(MAX_RUN_MICROCYCLES);
+            send_json(res, session->state_json());
+        }
     });
 
     // The built frontend, if there is one (npm run build in frontend/)

@@ -20,6 +20,7 @@ using isa::Word;
 struct SourceLine {
     unsigned number = 0;
     std::string text;
+    std::string macro; // the macro line this instruction was expanded from, e.g. "push r1" ("" if none)
 };
 
 enum class OperandKind { Register, Immediate, Memory, Label };
@@ -94,7 +95,52 @@ std::vector<SourceLine> preprocess(std::string_view source) {
         }
         text = trim(std::move(text));
         if (!text.empty()) {
-            result.push_back(SourceLine{number, std::move(text)});
+            result.push_back(SourceLine{number, std::move(text), ""});
+        }
+    }
+    return result;
+}
+
+// Stage 2b: expand the stack macros (full-descending stack, sp = r14):
+//   push rX  ->  sub sp, sp, 4    then  st rX, 0[sp]
+//   pop rX   ->  add sp, sp, 4    then  ld rX, -4[sp]
+// sp moves first, so a push on a full stack raises StackOverflow and a pop on an empty
+// stack raises StackUnderflow before memory is touched. A label stays on the first instruction.
+std::vector<SourceLine> expand_macros(const std::vector<SourceLine>& lines) {
+    std::vector<SourceLine> result;
+    for (const SourceLine& line : lines) {
+        std::string label;
+        std::string rest = line.text;
+        const auto colon = rest.find(':');
+        if (colon != std::string::npos) {
+            label = rest.substr(0, colon + 1) + " ";
+            rest = trim(rest.substr(colon + 1));
+        }
+
+        std::istringstream words{rest};
+        std::string mnemonic;
+        std::string reg;
+        std::string extra;
+        words >> mnemonic >> reg >> extra;
+        mnemonic = lower(mnemonic);
+        if (mnemonic != "push" && mnemonic != "pop") {
+            result.push_back(line);
+            continue;
+        }
+        if (reg.empty() || !extra.empty()) {
+            fail(line, "'" + mnemonic + "' takes one register");
+        }
+        if (lower(reg) == "sp" || lower(reg) == "r14") {
+            fail(line, "cannot " + mnemonic + " sp");
+        }
+
+        const std::string macro = mnemonic + " " + reg;
+        if (mnemonic == "push") {
+            result.push_back(SourceLine{line.number, label + "sub sp, sp, 4", macro});
+            result.push_back(SourceLine{line.number, "st " + reg + ", 0[sp]", macro});
+        } else {
+            result.push_back(SourceLine{line.number, label + "add sp, sp, 4", macro});
+            result.push_back(SourceLine{line.number, "ld " + reg + ", -4[sp]", macro});
         }
     }
     return result;
@@ -502,7 +548,7 @@ std::vector<ListingLine> Assembler::assemble_listing_file(const std::string& inp
 
 std::vector<ListingLine> Assembler::assemble_listing(std::string_view source, const std::string& source_name) const {
     try {
-        const std::vector<SourceLine> cleaned = preprocess(source);
+        const std::vector<SourceLine> cleaned = expand_macros(preprocess(source));
         std::vector<ParsedLine> parsed = parse_lines(cleaned);
         const SymbolTable symbols = first_pass(parsed);
 
@@ -511,6 +557,7 @@ std::vector<ListingLine> Assembler::assemble_listing(std::string_view source, co
             ListingLine entry;
             entry.line = line.source.number;
             entry.text = line.source.text;
+            entry.macro = line.source.macro;
             entry.has_instruction = line.has_instruction;
             entry.address = line.address;
             if (line.has_instruction) {

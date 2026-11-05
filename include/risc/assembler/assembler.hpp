@@ -27,6 +27,7 @@ private:
 struct ListingLine {
     unsigned line = 0; // source line number
     std::string text; // source text without the comment, e.g. "fill: st r2, 0[r1]"
+    std::string macro; // the macro this instruction came from, e.g. "push r1" ("" if none)
     bool has_instruction = false; // false for a label-only line such as "sum_loop:"
     isa::Word address = 0; // where the instruction is in memory
     isa::Word word = 0; // its machine code

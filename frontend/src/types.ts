@@ -1,7 +1,32 @@
 // The JSON sent by the C++ backend (backend/session.cpp). Keep the two in step.
 
+export type Processor = "six" | "four";
+
 export const STAGE_NAMES = ["IF", "OF1", "OF2", "EX", "MA", "RW"] as const;
-export type StageName = (typeof STAGE_NAMES)[number];
+export const FOUR_STAGE_NAMES = ["IF", "OF", "EX", "MW"] as const;
+export type StageName = (typeof STAGE_NAMES)[number] | (typeof FOUR_STAGE_NAMES)[number];
+
+// The stage names of a processor, IF first
+export function stageNames(processor: Processor): readonly StageName[] {
+  return processor === "four" ? FOUR_STAGE_NAMES : STAGE_NAMES;
+}
+
+// The packet each stage works on, by key in CpuState.latches (IF builds a new one in "fetched")
+const STAGE_LATCHES: Record<Processor, string[]> = {
+  six: ["fetched", "ifOf1", "of1Of2", "of2Ex", "exMa", "maRw"],
+  four: ["fetched", "ifOf", "ofEx", "exMw"],
+};
+
+// The pipeline latches between the stages, in order, with their names
+export function latchList(state: CpuState): { name: string; packet: Packet }[] {
+  const names = stageNames(state.processor);
+  const keys = STAGE_LATCHES[state.processor];
+  const list: { name: string; packet: Packet }[] = [];
+  for (let i = 1; i < keys.length; i++) {
+    list.push({ name: `${names[i - 1]}/${names[i]}`, packet: state.latches[keys[i]] });
+  }
+  return list;
+}
 
 // ---- /api/program: changes only when a program is loaded ----
 
@@ -12,6 +37,7 @@ export interface ListingLine {
   address: number;
   word: number;
   assembly: string;
+  macro: string; // the macro this instruction came from, e.g. "push r1" ("" if none)
 }
 
 export interface StageWord {
@@ -42,6 +68,7 @@ export interface StageProgram {
 }
 
 export interface ProgramInfo {
+  processor: Processor;
   name: string;
   source: string;
   listing: ListingLine[];
@@ -103,14 +130,8 @@ export interface StageState {
   isMBranch: boolean;
 }
 
-export interface Latches {
-  fetched: Packet;
-  ifOf1: Packet;
-  of1Of2: Packet;
-  of2Ex: Packet;
-  exMa: Packet;
-  maRw: Packet;
-}
+// six-stage: fetched, ifOf1, of1Of2, of2Ex, exMa, maRw; four-stage: fetched, ifOf, ofEx, exMw
+export type Latches = Record<string, Packet>;
 
 export interface BeatCell {
   empty: boolean;
@@ -130,6 +151,7 @@ export interface BeatRecord {
 }
 
 export interface CpuState {
+  processor: Processor;
   status: "running" | "halted" | "exception";
   exception: { kind: string; pc: number } | null;
   counters: {
@@ -167,13 +189,78 @@ export interface CpuState {
   };
   registers: number[];
   memory: { address: number; value: number }[];
+  stack: StackState;
   beatLog: BeatRecord[];
 }
 
-// The packet each stage works on (IF builds a new one in "fetched")
+// The stack region around sp (full-descending: sp == end is an empty stack)
+export interface StackState {
+  sp: number;
+  base: number;
+  end: number;
+  words: { address: number; value: number; ra: boolean }[]; // ascending addresses, from just below sp to the top; ra: saved from r15
+}
+
+// ---- /api/benchmarks, /api/compare, /api/benchmark: fresh runs of all three processors ----
+
+export interface BenchmarkInfo {
+  name: string; // e.g. "benchmarks/alg01_bubble_sort.asm"
+  title: string;
+  about: string;
+  category: string;
+  expect: string;
+}
+
+export interface RunStatus {
+  status: "halted" | "exception" | "limit";
+  exception: { kind: string; pc: number } | null;
+  microcycles: number;
+  instructions: number;
+}
+
+export interface StageMeasure {
+  name: string;
+  busy: number; // microcycles the stage ran a microinstruction
+  critical: number; // beats in which it had the longest section
+  waits: number; // beats in which it waited for a data hazard
+  controlStoreWords: number;
+}
+
+export interface TimelineRow {
+  id: number;
+  pc: number;
+  assembly: string;
+  cells: [number, number, boolean][]; // beat, stage, waited
+}
+
+export interface PipelineRun extends RunStatus {
+  beats: number;
+  fetched: number;
+  stallBeats: number;
+  takenBranches: number;
+  stages: StageMeasure[];
+  beatLengths: { length: number; count: number }[];
+  // each beat charged to what left the last stage: an instruction (work) or a bubble's reason
+  cycleStack: Record<"work" | "stall" | "flush" | "fillDrain", { microcycles: number; beats: number }>;
+  timeline?: {
+    beats: { beat: number; microcycles: number; stall: number; taken: boolean }[];
+    rows: TimelineRow[];
+  };
+}
+
+export interface CompareResult {
+  program: BenchmarkInfo;
+  four: PipelineRun;
+  six: PipelineRun;
+  sequential: RunStatus & { controlStoreWords: number };
+  agree: boolean;
+  differences: string;
+  registers: number[];
+}
+
+// The packet a stage works on
 export function stagePacket(state: CpuState, stage: number): Packet {
-  const order: (keyof Latches)[] = ["fetched", "ifOf1", "of1Of2", "of2Ex", "exMa", "maRw"];
-  return state.latches[order[stage]];
+  return state.latches[STAGE_LATCHES[state.processor][stage]];
 }
 
 export function hex(value: number, digits = 4): string {
