@@ -5,7 +5,7 @@
 namespace risc::four_stage_micro {
 
 // Finds which registers an instruction reads in OF and EX, and which register it writes in MW,
-// straight from its instruction bits (Sarangi §10.6)
+// straight from its instruction bits
 class InterlockUnit {
 private:
     static unsigned field(isa::Word ir, unsigned pos, unsigned width) {

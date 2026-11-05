@@ -1,5 +1,8 @@
 #include "json_util.hpp"
 
+#include <stdexcept>
+
+#include "risc/alu/alu_options.hpp"
 #include "risc/isa/machine_config.hpp"
 #include "risc/micro/control/micro_decode_unit.hpp"
 #include "risc/visualizer/visualizer.hpp"
@@ -159,5 +162,27 @@ json stack_json(const memory::Memory& memory, isa::Word sp, const std::set<isa::
         j["words"].push_back(w);
     }
     return j;
+}
+
+json alu_config_json(const alu::AluConfig& config) {
+    json j;
+    j["adder"] = alu::adder_key(config.adder);
+    j["multiplier"] = alu::multiplier_key(config.multiplier);
+    j["divider"] = alu::divider_key(config.divider);
+    return j;
+}
+
+alu::AluConfig alu_config_from_json(const json& j) {
+    alu::AluConfig config;
+    if (j.contains("adder") && !alu::read_alu_option("--adder", j["adder"].get<std::string>(), config)) {
+        throw std::runtime_error("unknown adder");
+    }
+    if (j.contains("multiplier") && !alu::read_alu_option("--mul", j["multiplier"].get<std::string>(), config)) {
+        throw std::runtime_error("unknown multiplier");
+    }
+    if (j.contains("divider") && !alu::read_alu_option("--div", j["divider"].get<std::string>(), config)) {
+        throw std::runtime_error("unknown divider");
+    }
+    return config;
 }
 }

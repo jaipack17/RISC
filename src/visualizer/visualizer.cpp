@@ -1,5 +1,7 @@
 #include "risc/visualizer/visualizer.hpp"
 
+#include "risc/disassembler/disassembler.hpp"
+
 #include <cstdio>
 
 namespace risc::visualizer {
@@ -14,22 +16,6 @@ const char* BOLD = "\033[1m";
 const char* RESET = "\033[0m";
 
 const unsigned MEMORY_WORDS_SHOWN = 8;
-
-// The field of inst that starts at bit pos and is width bits wide
-isa::Word field(isa::Word inst, unsigned pos, unsigned width) {
-    isa::Word mask = (isa::Word{1} << width) - 1;
-    return (inst >> pos) & mask;
-}
-
-// Treat the low width bits of value as a signed number
-isa::SWord sign_extend(isa::Word value, unsigned width) {
-    isa::Word sign_bit = isa::Word{1} << (width - 1);
-    if (value & sign_bit) {
-        isa::Word mask = (isa::Word{1} << width) - 1;
-        value = value | ~mask;
-    }
-    return isa::SWord(value);
-}
 
 std::string format(const char* fmt, long long a, long long b = 0, long long c = 0) {
     char buffer[64];
@@ -113,46 +99,8 @@ std::string active_signals(const cpu::ControlSignals& c) {
     return text;
 }
 
-const isa::InstructionInfo* find_info(isa::Word inst) {
-    isa::Opcode opcode = isa::Opcode(field(inst, isa::OPCODE_POS, isa::OPCODE_BITS));
-    for (const isa::InstructionInfo& info : isa::INSTRUCTIONS) {
-        if (info.opcode == opcode) {
-            return &info;
-        }
-    }
-    return nullptr;
-}
-
 std::string reg(isa::Word index) {
     return "r" + std::to_string(index);
-}
-
-// The second operand as written: a register, or the immediate (signed, or hex for u/h)
-std::string second_operand(isa::Word inst) {
-    bool i_bit = field(inst, isa::I_POS, 1) == 1;
-    if (!i_bit) {
-        return reg(field(inst, isa::RS2_POS, isa::REG_BITS));
-    }
-    isa::Word mod = field(inst, isa::MOD_POS, isa::MOD_BITS);
-    isa::Word imm = field(inst, isa::IMM_POS, isa::IMM_BITS);
-    if (mod == isa::Word(isa::Modifier::Default)) {
-        return std::to_string(sign_extend(imm, isa::IMM_BITS));
-    }
-    return format("0x%llX", imm);
-}
-
-std::string modifier_suffix(isa::Word inst) {
-    if (field(inst, isa::I_POS, 1) == 0) {
-        return "";
-    }
-    isa::Word mod = field(inst, isa::MOD_POS, isa::MOD_BITS);
-    if (mod == isa::Word(isa::Modifier::Unsigned)) {
-        return "u";
-    }
-    if (mod == isa::Word(isa::Modifier::High)) {
-        return "h";
-    }
-    return "";
 }
 
 void print_registers(const cpu::CPU& cpu, const std::array<isa::Word, isa::NUM_REGS>& previous, bool first_draw) {
@@ -242,33 +190,13 @@ void print_units(const cpu::CycleTrace& t) {
 }
 
 std::string disassemble(isa::Word pc, isa::Word inst) {
-    const isa::InstructionInfo* info = find_info(inst);
-    if (info == nullptr) {
+    isa::Word target = disassembler::branch_target(pc, inst);
+    isa::SWord offset = isa::SWord(target - pc) / isa::SWord(isa::WORD_BYTES);
+    std::string text = disassembler::instruction_text(inst, format("%+lld  (-> 0x%04llX)", offset, target));
+    if (text.empty()) {
         return format(".word 0x%08llX", inst);
     }
-
-    std::string name(info->mnemonic);
-    std::string rd = reg(field(inst, isa::RD_POS, isa::REG_BITS));
-    std::string rs1 = reg(field(inst, isa::RS1_POS, isa::REG_BITS));
-
-    switch (info->operands) {
-        case isa::Operands::RdRs1Src2:
-            return name + modifier_suffix(inst) + " " + rd + ", " + rs1 + ", " + second_operand(inst);
-        case isa::Operands::Rs1Src2:
-            return name + modifier_suffix(inst) + " " + rs1 + ", " + second_operand(inst);
-        case isa::Operands::RdSrc2:
-            return name + modifier_suffix(inst) + " " + rd + ", " + second_operand(inst);
-        case isa::Operands::RdMem:
-            return name + " " + rd + ", " + second_operand(inst) + "[" + rs1 + "]";
-        case isa::Operands::Label: {
-            isa::SWord offset = sign_extend(field(inst, isa::OFFSET_POS, isa::OFFSET_BITS), isa::OFFSET_BITS);
-            isa::Word target = pc + (isa::Word(offset) << 2);
-            return name + " " + format("%+lld  (-> 0x%04llX)", offset, target);
-        }
-        case isa::Operands::None:
-            return name;
-    }
-    return name;
+    return text;
 }
 
 void Visualizer::draw(const cpu::CPU& cpu, const memory::Memory& memory) {

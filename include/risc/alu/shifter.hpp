@@ -1,39 +1,42 @@
 #pragma once
 
-#include <cstdint>
-
 #include "risc/alu/alu_types.hpp"
+#include "risc/alu/gates.hpp"
 #include "risc/isa/isa_config.hpp"
 
 namespace risc::alu {
 
 class Shifter {
 public:
-    // 5-stage Logarithmic Barrel Shifter (Stages 16 -> 8 -> 4 -> 2 -> 1)
-    static Word shift(Word a, Word b, ShiftOp op) {
-        const unsigned amount = b & (isa::WORD_BITS - 1); // low 5 bits (0 to 31)
-        Word result = a;
-
-        for (unsigned distance = isa::WORD_BITS >> 1; distance > 0; distance >>= 1) {
-            if ((amount & distance) == 0) {
-                continue;
+    // Logarithmic barrel shifter: 5 levels of muxes shift by 16, 8, 4, 2 and 1 when that bit of
+    // the shift amount (the low 5 bits of b) is set. Shifted-in bits are 0, or the sign for asr.
+    static Word shift(Circuit& c, Word a, Word b, ShiftOp op) {
+        Bus value = to_bus(a);
+        Bus amount = to_bus(b & (isa::WORD_BITS - 1), 5);
+        for (int level = 4; level >= 0; level--) {
+            int distance = 1 << level;
+            Bit fill = constant(false);
+            if (op == ShiftOp::Asr) {
+                fill = value[isa::WORD_BITS - 1];
             }
-
-            if (op == ShiftOp::Lsl) {
-                result <<= distance;
-            } else if (op == ShiftOp::Lsr) {
-                result >>= distance;
-            } else { // ShiftOp::Asr
-                const bool negative = (result >> (isa::WORD_BITS - 1)) != 0;
-                result = static_cast<Word>(static_cast<SWord>(result) >> distance);
-                if (negative) {
-                    result |= (~Word{0}) << (isa::WORD_BITS - distance);
+            Bus next;
+            for (int i = 0; i < int(isa::WORD_BITS); i++) {
+                Bit moved = fill;
+                if (op == ShiftOp::Lsl && i - distance >= 0) {
+                    moved = value[i - distance];
+                } else if (op != ShiftOp::Lsl && i + distance < int(isa::WORD_BITS)) {
+                    moved = value[i + distance];
                 }
+                next.push_back(c.mux(amount[level], value[i], moved));
             }
+            value = next;
         }
+        return Word(to_number(value));
+    }
 
-        return result;
+    static Word shift(Word a, Word b, ShiftOp op) {
+        Circuit c;
+        return shift(c, a, b, op);
     }
 };
-
-} // namespace risc::alu
+}

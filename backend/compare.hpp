@@ -4,6 +4,7 @@
 #include <string>
 
 #include "nlohmann/json.hpp"
+#include "risc/alu/alu_types.hpp"
 #include "risc/four-stage-micro/pipeline.hpp"
 #include "risc/microassembler/microassembler.hpp"
 #include "risc/microassembler/splitter.hpp"
@@ -27,6 +28,7 @@ public:
 
     // Assembles the program (throws AssemblerError) and runs it on the three processors.
     // With timeline, the first beats of both pipelines are recorded instruction by instruction.
-    json compare(const std::string& source, bool timeline) const;
+    // All three ALUs use the algorithms in alu_config.
+    json compare(const std::string& source, bool timeline, const alu::AluConfig& alu_config = alu::AluConfig{}) const;
 };
 }

@@ -185,6 +185,8 @@ Modes:
 
 ## 4. Hardware Complexity & Delay Model Comparison
 
+> **Replaced (Nov 2026):** the figures below were estimates typed into the code. The units are now built from gates as they run, and their delay, area and µcycles are counted. See `docs/alu_timing.md` for the counted figures and how they change the processors' timing.
+
 To provide quantitative data for the project report (Item 5), each algorithm exposes structural metrics:
 
 | Sub-unit | Algorithm | Logic Depth ($D$) | Operator Nodes ($N$) | FO4 Equivalent Delay |

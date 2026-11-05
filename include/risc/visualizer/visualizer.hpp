@@ -11,7 +11,7 @@
 
 namespace risc::visualizer {
 
-// Text form of an instruction, for display only (the real disassembler comes later)
+// Text form of an instruction for display: a branch shows its offset and target (see disassembler/)
 std::string disassemble(isa::Word pc, isa::Word inst);
 
 // Draws the CPU state after every cycle, redrawn in place in the terminal.

@@ -58,6 +58,11 @@ constexpr unsigned args_opcode(Args args) {
     return args & ((1u << ARGS_OPCODE_BITS) - 1);
 }
 
+// The args give the ALU a command (which may take more than one µcycle)
+constexpr bool runs_alu(Args args) {
+    return args != NO_ARGS && args_unit(args) == UnitId::Alu;
+}
+
 // So microcode can write <add>, <read>, <load> directly, e.g. args(AluOp::Add)
 constexpr Args args(AluOp op) {
     return make_args(UnitId::Alu, unsigned(op));

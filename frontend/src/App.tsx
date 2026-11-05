@@ -11,7 +11,10 @@ import RegistersPanel from "./components/RegistersPanel";
 import MemoryPanel from "./components/MemoryPanel";
 import LatchTable from "./components/LatchTable";
 import StackPanel from "./components/StackPanel";
+import AluPage from "./components/alu/AluPage";
 import ComparePage from "./components/compare/ComparePage";
+
+type Page = "simulator" | "compare" | "alu";
 
 export default function App() {
   const [program, setProgram] = useState<ProgramInfo | null>(null);
@@ -34,12 +37,17 @@ export default function App() {
     }
   });
 
-  const [page, setPage] = useState<"simulator" | "compare">(() => {
-    if (new URLSearchParams(window.location.search).get("page") === "compare") {
-      return "compare";
+  const [page, setPage] = useState<Page>(() => {
+    const asked = new URLSearchParams(window.location.search).get("page"); // e.g. ?page=alu
+    if (asked === "compare" || asked === "alu") {
+      return asked;
     }
     try {
-      return localStorage.getItem("page") === "compare" ? "compare" : "simulator";
+      const remembered = localStorage.getItem("page");
+      if (remembered === "compare" || remembered === "alu") {
+        return remembered;
+      }
+      return "simulator";
     } catch {
       return "simulator";
     }
@@ -67,7 +75,7 @@ export default function App() {
     }
   });
 
-  function choosePage(next: "simulator" | "compare") {
+  function choosePage(next: Page) {
     setPlaying(false);
     setPage(next);
     try {
@@ -199,12 +207,30 @@ export default function App() {
         <button className={page === "compare" ? "selected" : ""} onClick={() => choosePage("compare")}>
           Compare 4 vs 6
         </button>
+        <button className={page === "alu" ? "selected" : ""} onClick={() => choosePage("alu")}>
+          ALU algorithms
+        </button>
       </div>
       <button onClick={() => chooseTheme(theme === "dark" ? "light" : "dark")} title="Switch between the dark and the light theme">
         {theme === "dark" ? "Light" : "Dark"}
       </button>
     </nav>
   );
+
+  if (page === "alu") {
+    return (
+      <div className="app">
+        <header className="toolbar">
+          <div className="toolbar-row">
+            <span className="title">RISC201 · ALU algorithms</span>
+            <span className="spacer" />
+            {pages}
+          </div>
+        </header>
+        <AluPage />
+      </div>
+    );
+  }
 
   if (page === "compare") {
     return (
@@ -235,6 +261,10 @@ export default function App() {
         onReset={() => {
           setPlaying(false);
           call(() => api.reset(processor));
+        }}
+        onAluConfig={(config) => {
+          setPlaying(false);
+          call(() => api.setAluConfig(processor, config));
         }}
         onStepMicrocycle={() => call(() => api.step(processor, "microcycle"))}
         onStepBeat={() => call(() => api.step(processor, "beat"))}

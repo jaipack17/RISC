@@ -59,6 +59,8 @@ public:
     bool halted = false;
     bool ran = false; // ran a microinstruction in the last microcycle (for display)
     unsigned last_upc = 0; // the µaddress it ran
+    unsigned alu_wait = 0; // µcycles the ALU still needs for its command; the stage holds until then
+    unsigned upc_after_alu = 0;
 
     StageMicroControlUnit(Stage s) {
         stage = s;
@@ -71,6 +73,8 @@ public:
         halted = false;
         ran = false;
         last_upc = 0;
+        alu_wait = 0;
+        upc_after_alu = 0;
     }
 
     // Store this stage's microprogram, starting at address 0
@@ -100,10 +104,24 @@ public:
             return;
         }
         ran = true;
+        if (alu_wait > 0) {
+            alu_wait--; // still the microinstruction at last_upc
+            if (alu_wait == 0) {
+                upc = upc_after_alu;
+                done = at_end();
+            }
+            return;
+        }
         last_upc = upc;
         signals = micro_decode.decode(microprogram[upc]);
         apply_signals(signals, datapath, memory);
-        upc = next_upc(signals, datapath);
+        unsigned next = next_upc(signals, datapath);
+        if (micro::runs_alu(signals.args) && datapath.alu.microcycles > 1) {
+            alu_wait = datapath.alu.microcycles - 1;
+            upc_after_alu = next;
+            return;
+        }
+        upc = next;
         done = at_end();
     }
 };

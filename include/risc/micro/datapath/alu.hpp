@@ -40,10 +40,7 @@ public:
     bool flagE = false;
     bool flagGT = false;
 
-    explicit ALU(alu::AdderAlgorithm adder = alu::AdderAlgorithm::CarryLookahead,
-                 alu::MultiplierAlgorithm multiplier = alu::MultiplierAlgorithm::BoothRadix2,
-                 alu::DividerAlgorithm divider = alu::DividerAlgorithm::Restoring)
-        : core_alu(adder, multiplier, divider) {}
+    unsigned microcycles = 1; // µcycles the last command took (see alu/alu.hpp)
 
     void reset() {
         A = 0;
@@ -51,18 +48,22 @@ public:
         aluResult = 0;
         flagE = false;
         flagGT = false;
+        microcycles = 1;
     }
 
-    void select_adder(alu::AdderAlgorithm algo) { core_alu.select_adder(algo); }
-    void select_multiplier(alu::MultiplierAlgorithm algo) { core_alu.select_multiplier(algo); }
-    void select_divider(alu::DividerAlgorithm algo) { core_alu.select_divider(algo); }
+    // Which adder, multiplier and divider the ALU uses
+    void configure(const alu::AluConfig& config) {
+        core_alu.configure(config);
+    }
 
-    const alu::OptimizedALU& core() const { return core_alu; }
-    alu::OptimizedALU& core() { return core_alu; }
+    const alu::AluConfig& configuration() const {
+        return core_alu.configuration();
+    }
 
     // Carry out the command from args on A and B
     void run(AluOp op) {
         alu::ALUFlags flags;
+        core_alu.microcycles = 1; // and/or/xor/not take one
 
         switch (op) {
             case AluOp::Nop:
@@ -109,6 +110,7 @@ public:
                 aluResult = alu::OptimizedALU::bitwise_not(B);
                 break;
         }
+        microcycles = core_alu.microcycles;
     }
 };
 

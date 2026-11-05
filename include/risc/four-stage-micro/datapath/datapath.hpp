@@ -18,7 +18,7 @@ namespace risc::four_stage_micro {
 using micro::MicroReg;
 using micro::TransferMux;
 
-// The units of Figure 9.22 shared out among the four stages, each stage with its own local bus
+// The microprogrammed datapath's units shared out among the four stages, each stage with its own local bus
 class Datapath {
 private:
     // The value a register puts on a stage's write bus (0 if it is not on that stage's bus)

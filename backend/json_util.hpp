@@ -4,6 +4,7 @@
 #include <string>
 
 #include "nlohmann/json.hpp"
+#include "risc/alu/alu_types.hpp"
 #include "risc/exception.hpp"
 #include "risc/isa/isa_config.hpp"
 #include "risc/memory/memory.hpp"
@@ -33,6 +34,12 @@ std::string disassemble(isa::Word pc, isa::Word ir);
 json microinstruction_json(micro::MicroWord word);
 
 json signals_json(const micro::MicroControlSignals& s);
+
+// {"adder": "prefix", "multiplier": "booth4", "divider": "nonrestoring"}
+json alu_config_json(const alu::AluConfig& config);
+
+// The other way; throws std::runtime_error for an unknown name
+alu::AluConfig alu_config_from_json(const json& j);
 
 // The stack region around sp: sp, the bounds, and the words from just below sp up to the top.
 // return_slots: the addresses whose last store came from ra (r15), i.e. saved return addresses.

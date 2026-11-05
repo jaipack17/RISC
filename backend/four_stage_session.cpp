@@ -106,6 +106,11 @@ void FourStageSession::reset() {
     restart();
 }
 
+void FourStageSession::configure_alu(const alu::AluConfig& config) {
+    cpu.datapath.alu.configure(config);
+    restart();
+}
+
 // The start of a beat: remember what each stage holds
 void FourStageSession::open_beat() {
     current_beat = FourStageBeatRecord{};
@@ -261,6 +266,7 @@ json FourStageSession::state_json() const {
     json j;
     j["processor"] = "four";
     j["status"] = status_name(cpu.status);
+    j["alu"] = alu_config_json(cpu.datapath.alu.configuration());
     j["exception"] = nullptr;
     if (cpu.status == CpuStatus::Exception) {
         j["exception"]["kind"] = exception_name(cpu.exception);
@@ -296,6 +302,7 @@ json FourStageSession::state_json() const {
         st["halted"] = stage.halted;
         st["ran"] = stage.ran;
         st["lastUpc"] = stage.last_upc;
+        st["aluWait"] = stage.alu_wait; // µcycles the ALU still needs
         st["sourceLine"] = 0;
         st["part"] = false;
         if (stage.last_upc < program.source_lines.size()) {

@@ -156,7 +156,7 @@ export default function FourStageDatapath({ state, program, blackBox }: { state:
     <svg viewBox={`0 0 ${W} ${H}`} className={"dp" + (blackBox ? " blackbox" : "")}>
       <Markers />
 
-      {/* beat controller and interlock unit (Fig 10.17's Data-lock / Branch-lock units) */}
+      {/* beat controller and interlock unit (data-lock and branch-lock) */}
       <g className={"controller" + (stallAt >= 0 || branch ? " on" : "")}>
         <rect x={sx(0)} y={CTRL_Y} width={W - 2 * LEFT} height={CTRL_H} />
         <text x={sx(0) + 12} y={CTRL_Y + 17} className="unit-title left">
@@ -202,6 +202,9 @@ export default function FourStageDatapath({ state, program, blackBox }: { state:
         if (st.ran) {
           status = `ran µ${st.lastUpc}`;
         }
+        if (st.ran && st.aluWait > 0) {
+          status = `µ${st.lastUpc} · ALU busy, ${st.aluWait} more`;
+        }
         let where = "";
         if (word) {
           where = word.sourceLine > 0 ? `line ${word.sourceLine}${word.part ? " · part" : ""}` : "end of section";
@@ -225,7 +228,7 @@ export default function FourStageDatapath({ state, program, blackBox }: { state:
                 {word ? word.text.slice(0, 46) : ""}
               </text>
             </g>
-            {/* control: µcontrol drives its stage's bus (the double arrow of Fig 9.22) */}
+            {/* control: µcontrol drives its stage's bus (the double arrow) */}
             <Wire d={`M${sx(i) + 46} ${UC_Y + UC_H} L${sx(i) + 46} ${STAGE_Y}`} on={st.ran} kind="control" flow={false} />
             {!blackBox && <Wire d={`M${sx(i) + 46} ${STAGE_Y + 52} L${sx(i) + 46} ${BUS_Y}`} on={st.ran} kind="control" flow={false} />}
           </g>
@@ -433,7 +436,7 @@ export default function FourStageDatapath({ state, program, blackBox }: { state:
         );
       })}
 
-      {/* branch: EX's branch unit sends the target back to IF's pc (red, like Fig 10.17) */}
+      {/* branch: EX's branch unit sends the target back to IF's pc (red) */}
       <Wire
         d={`M${sx(EX) + 194} ${STAGE_Y} L${sx(EX) + 194} ${BRANCH_Y} L${sx(IF) + SW - 84} ${BRANCH_Y} L${sx(IF) + SW - 84} ${STAGE_Y}`}
         on={branch}
@@ -504,7 +507,7 @@ export default function FourStageDatapath({ state, program, blackBox }: { state:
         same 64 KB memory as IF
       </text>
 
-      {/* write-back: MW writes the register file (red, like Fig 10.17) */}
+      {/* write-back: MW writes the register file (red) */}
       <Wire
         d={`M${slotX(MW, "regData")} ${portY} L${slotX(MW, "regData")} ${WB_Y} L${writePortX} ${WB_Y} L${writePortX} ${MEM_Y + MEM_H}`}
         on={write}

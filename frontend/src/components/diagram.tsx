@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CpuState, Packet, StageState } from "../types";
 import { hex, stageNames, stagePacket } from "../types";
 
-// Drawing pieces shared by the six-stage and the four-stage block diagrams (Sarangi's figures
-// 9.22 and 10.17): the vertical layout, wires, registers on a bus, units, and the instruction
-// tokens of the black-box view.
+// Drawing pieces shared by the six-stage and the four-stage block diagrams: the vertical
+// layout, wires, registers on a bus, units, and the instruction tokens of the black-box view.
 
 export const CTRL_Y = 14; // beat controller
 export const CTRL_H = 40;
@@ -59,7 +58,7 @@ export interface SlotSpec {
   value: string;
 }
 
-// A register on a stage's local bus, like the small boxes on the shared bus in Fig 9.22
+// A register on a stage's local bus
 export function Slot({ x, w, spec, read, written }: { x: number; w: number; spec: SlotSpec; read: boolean; written: boolean }) {
   return (
     <g className={"slot" + (read ? " read" : "") + (written ? " written" : "")}>

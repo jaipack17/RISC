@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "risc/alu/alu_options.hpp"
 #include "risc/assembler/assembler.hpp"
 #include "risc/exception.hpp"
 #include "risc/four-stage-micro/cpu.hpp"
@@ -107,18 +108,36 @@ void print_result(const char* name, const RunResult& r, bool pipelined) {
     std::printf("  taken branches         %llu\n", r.taken_branches);
 }
 
-// Usage: risc_4stage_run <program.asm> [microcode.masm]   (default microcode: microcode/vertical.masm)
+// Usage: risc_4stage_run <program.asm> [microcode.masm] [--adder ..] [--mul ..] [--div ..]   (default microcode: microcode/vertical.masm)
 // Runs the program on the four-stage pipelined microprogrammed processor, printing one line per beat,
 // then runs it on the six-stage pipeline and on the sequential microprogrammed processor and compares them.
 int main(int argc, char* argv[]) {
-    if (argc < 2 || argc > 3) {
-        std::cerr << "Usage: risc_4stage_run <program.asm> [microcode.masm]\n";
-        return 1;
-    }
-    std::string program_path = argv[1];
+    std::string usage = std::string("Usage: risc_4stage_run <program.asm> [microcode.masm] ") + alu::ALU_OPTIONS_USAGE + "\n";
+    std::string program_path;
     std::string microcode_path = "microcode/vertical.masm";
-    if (argc == 3) {
-        microcode_path = argv[2];
+    alu::AluConfig alu_config;
+    bool has_microcode = false;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg.rfind("--", 0) == 0) {
+            if (i + 1 >= argc || !alu::read_alu_option(arg, argv[i + 1], alu_config)) {
+                std::cerr << usage;
+                return 1;
+            }
+            i++;
+        } else if (program_path.empty()) {
+            program_path = arg;
+        } else if (!has_microcode) {
+            microcode_path = arg;
+            has_microcode = true;
+        } else {
+            std::cerr << usage;
+            return 1;
+        }
+    }
+    if (program_path.empty()) {
+        std::cerr << usage;
+        return 1;
     }
 
     memory::Memory memory;
@@ -130,6 +149,9 @@ int main(int argc, char* argv[]) {
     memory::Memory seq_memory;
     micro::Datapath seq_datapath;
     micro::MicroControlUnit seq_control;
+    cpu.datapath.alu.configure(alu_config);
+    six_cpu.datapath.alu.configure(alu_config);
+    seq_datapath.alu.configure(alu_config);
 
     try {
         // Assemble the program and put it in the instruction region of all three memories

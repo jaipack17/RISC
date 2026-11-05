@@ -18,20 +18,13 @@ private:
     alu::OptimizedALU core_alu;
 
 public:
-    explicit ALU(alu::AdderAlgorithm adder = alu::AdderAlgorithm::CarryLookahead,
-                 alu::MultiplierAlgorithm multiplier = alu::MultiplierAlgorithm::BoothRadix2,
-                 alu::DividerAlgorithm divider = alu::DividerAlgorithm::Restoring)
-        : core_alu(adder, multiplier, divider) {}
-
-    void select_adder(alu::AdderAlgorithm algo) { core_alu.select_adder(algo); }
-    void select_multiplier(alu::MultiplierAlgorithm algo) { core_alu.select_multiplier(algo); }
-    void select_divider(alu::DividerAlgorithm algo) { core_alu.select_divider(algo); }
-
-    const alu::OptimizedALU& core() const { return core_alu; }
-    alu::OptimizedALU& core() { return core_alu; }
+    // Which adder, multiplier and divider the ALU uses
+    void configure(const alu::AluConfig& config) {
+        core_alu.configure(config);
+    }
 
     // Final multiplexer
-    Word execute(Word a, Word b, const ControlSignals& ctrl, Flags& flags) const {
+    Word execute(Word a, Word b, const ControlSignals& ctrl, Flags& flags) {
         if (ctrl.isAdd || ctrl.isSub || ctrl.isCmp) {
             alu::ALUFlags alu_flags;
             Word result = 0;

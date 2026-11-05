@@ -76,6 +76,9 @@ public:
     // Back to the start of the loaded program
     void reset();
 
+    // Which adder, multiplier and divider the ALU uses; starts the program again
+    void configure_alu(const alu::AluConfig& config);
+
     void step_microcycle();
     void step_beat();
     void run(std::uint64_t max_microcycles);

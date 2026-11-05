@@ -105,7 +105,7 @@ std::string micro_text(const micro::Microinstruction& m) {
     return name;
 }
 
-// The value of a microcode-visible register (Table 9.7), for display
+// The value of a microcode-visible register, for display
 isa::Word internal_value(const micro::Datapath& d, MicroReg reg) {
     switch (reg) {
         case MicroReg::pc:
@@ -324,7 +324,7 @@ void MicroVisualizer::draw(const micro::Datapath& d, const micro::MicroControlUn
         }
     }
 
-    // ---- Internal registers (Table 9.7), changed ones highlighted ----
+    // ---- Internal registers, changed ones highlighted ----
     std::printf("──────────────────────────────────────────────────────────────────────────────────────────\n");
     std::printf(" %sINTERNAL REGISTERS%s\n", BOLD, RESET);
     const MicroReg groups[5][6] = {

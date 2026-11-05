@@ -128,6 +128,7 @@ export interface StageState {
   writeBus: number;
   readBus: number;
   isMBranch: boolean;
+  aluWait: number; // µcycles the ALU still needs for the command at lastUpc
 }
 
 // six-stage: fetched, ifOf1, of1Of2, of2Ex, exMa, maRw; four-stage: fetched, ifOf, ofEx, exMw
@@ -153,6 +154,7 @@ export interface BeatRecord {
 export interface CpuState {
   processor: Processor;
   status: "running" | "halted" | "exception";
+  alu: AluConfig;
   exception: { kind: string; pc: number } | null;
   counters: {
     microcycles: number;
@@ -265,4 +267,80 @@ export function stagePacket(state: CpuState, stage: number): Packet {
 
 export function hex(value: number, digits = 4): string {
   return "0x" + (value >>> 0).toString(16).toUpperCase().padStart(digits, "0");
+}
+
+// The ALU's algorithms (backend: alu/alu_options.hpp)
+export type AdderKey = "ripple" | "select" | "cla" | "prefix";
+export type MultiplierKey = "shiftadd" | "booth2" | "booth4";
+export type DividerKey = "restoring" | "nonrestoring";
+
+export interface AluConfig {
+  adder: AdderKey;
+  multiplier: MultiplierKey;
+  divider: DividerKey;
+}
+
+export const ADDER_NAMES: Record<AdderKey, string> = {
+  ripple: "Ripple-carry",
+  select: "Carry-select",
+  cla: "Carry-lookahead",
+  prefix: "Kogge-Stone",
+};
+
+export const MULTIPLIER_NAMES: Record<MultiplierKey, string> = {
+  shiftadd: "Shift-and-add",
+  booth2: "Booth radix-2",
+  booth4: "Booth radix-4",
+};
+
+export const DIVIDER_NAMES: Record<DividerKey, string> = {
+  restoring: "Restoring",
+  nonrestoring: "Non-restoring",
+};
+
+// GET /api/alu: every unit measured from its gates, and the benchmarks run with each algorithm
+export interface AdderMeasure {
+  key: AdderKey;
+  name: string;
+  delay: number; // gate delays
+  area: number; // unit-gate area
+  compareDelay: number;
+  addMicrocycles: number;
+  compareMicrocycles: number;
+}
+
+export interface IterativeMeasure {
+  stepDelay: number;
+  area: number;
+  min: number; // µcycles per operation
+  average: number;
+  max: number;
+}
+
+export interface AluRunTotals {
+  microcycles: number;
+  instructions: number;
+  perProgram: number[];
+}
+
+export interface AluRun {
+  unit: "default" | "adder" | "multiplier" | "divider";
+  alu: AluConfig;
+  four: AluRunTotals;
+  six: AluRunTotals;
+  sequential: AluRunTotals;
+  agree: number;
+}
+
+export interface AluReport {
+  units: {
+    microcycleLength: number;
+    fastestAdder: AdderKey;
+    defaults: AluConfig;
+    adders: AdderMeasure[];
+    multipliers: { key: MultiplierKey; name: string; byAdder: Record<AdderKey, IterativeMeasure> }[];
+    dividers: { key: DividerKey; name: string; byAdder: Record<AdderKey, IterativeMeasure> }[];
+  };
+  programs: BenchmarkInfo[];
+  runs: AluRun[];
 }

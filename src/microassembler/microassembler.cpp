@@ -135,7 +135,7 @@ std::vector<ParsedLine> first_pass(const std::vector<Line>& lines,
     return code;
 }
 
-// Table 9.7 register names, lowercase, in MicroReg order (index 0 is MicroReg::None)
+// The microcode-visible register names, lowercase, in MicroReg order (index 0 is MicroReg::None)
 const char* REGISTER_NAMES[] = {"", "pc", "ir", "i", "rd", "rs1", "rs2", "immx", "branchtarget",
                                 "regsrc", "regdata", "regval", "a", "b", "flage", "flaggt",
                                 "aluresult", "mar", "mdr", "ldresult"};
@@ -152,7 +152,7 @@ micro::MicroReg parse_register(unsigned line, const std::string& token) {
     throw MicroassemblerError(line, "unknown register '" + token + "'");
 }
 
-// A register that loads from the read bus (§9.7: not the decode registers or the flags)
+// A register that loads from the read bus (not the decode registers or the flags)
 micro::MicroReg parse_destination(unsigned line, const std::string& token) {
     micro::MicroReg reg = parse_register(line, token);
     bool connected = reg == micro::MicroReg::pc || reg == micro::MicroReg::regSrc ||
@@ -229,7 +229,7 @@ void check_operand_count(const ParsedLine& p, unsigned min, unsigned max, const 
     }
 }
 
-// Pass 2: turn one microinstruction's tokens into its fields (Table 9.8)
+// Pass 2: turn one microinstruction's tokens into its fields
 micro::Microinstruction parse_microinstruction(const ParsedLine& p, const std::map<std::string, unsigned>& labels) {
     const std::vector<std::string>& t = p.tokens;
     const std::string& op = t[0];

@@ -12,8 +12,10 @@
 #include <vector>
 
 #include "httplib.h"
+#include "alu_report.hpp"
 #include "compare.hpp"
 #include "four_stage_session.hpp"
+#include "json_util.hpp"
 #include "nlohmann/json.hpp"
 #include "session.hpp"
 
@@ -267,6 +269,54 @@ int main(int argc, char* argv[]) {
         } else {
             session->reset();
             send_json(res, session->state_json());
+        }
+    });
+
+    // Body: {"adder": "prefix", "multiplier": "booth4", "divider": "nonrestoring"}; both processors
+    // switch to it and start the program again
+    server.Post("/api/alu-config", [&](const httplib::Request& req, httplib::Response& res) {
+        std::lock_guard<std::mutex> guard(lock);
+        try {
+            alu::AluConfig config = web::alu_config_from_json(json::parse(req.body));
+            session->configure_alu(config);
+            four_session->configure_alu(config);
+            if (wants_four(req)) {
+                send_json(res, four_session->state_json());
+            } else {
+                send_json(res, session->state_json());
+            }
+        } catch (const std::exception& error) {
+            send_error(res, 400, error.what());
+        }
+    });
+
+    // The ALU page: the units measured from their gates, and every benchmark run with each algorithm.
+    // Takes several seconds the first time, so the answer is kept.
+    std::mutex alu_lock;
+    json alu_report;
+    server.Get("/api/alu", [&](const httplib::Request&, httplib::Response& res) {
+        std::lock_guard<std::mutex> guard(alu_lock);
+        try {
+            if (alu_report.is_null()) {
+                json programs = json::array();
+                std::vector<std::string> sources;
+                for (const std::string& name : list_programs()) {
+                    if (name.rfind(BENCHMARKS_FOLDER + "/", 0) != 0) {
+                        continue;
+                    }
+                    std::string source = read_file(PROGRAMS_FOLDER + "/" + name);
+                    programs.push_back(benchmark_info(name, source));
+                    sources.push_back(source);
+                }
+                json report;
+                report["units"] = web::alu_units_json();
+                report["programs"] = programs;
+                report["runs"] = web::alu_runs_json(*comparer, sources);
+                alu_report = report;
+            }
+            send_json(res, alu_report);
+        } catch (const std::exception& error) {
+            send_error(res, 500, error.what());
         }
     });
 

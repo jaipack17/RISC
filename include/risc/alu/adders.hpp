@@ -1,270 +1,225 @@
 #pragma once
 
-#include <array>
-#include <cstdint>
+#include <vector>
 
 #include "risc/alu/alu_types.hpp"
+#include "risc/alu/gates.hpp"
 #include "risc/isa/isa_config.hpp"
 
 namespace risc::alu {
 
+struct AdderOutput {
+    Bus sum;
+    Bit carry_out;
+};
+
+// The four adders, built from gates for any width. Each one works out the carry into every bit
+// from the bits' generate (g = a·b) and propagate (p = a⊕b) signals; then sum = p ⊕ carry.
 class Adders {
 private:
-    static constexpr unsigned WIDTH = isa::WORD_BITS;
+    static constexpr unsigned GROUP = 4; // bits in a lookahead group or a carry-select block
 
-    // 1. Ripple Carry Adder (Slides 9-10)
-    // Sequentially ripples carry through all 32 single-bit full adders: O(n) delay
-    static AdderResult ripple_carry(Word a, Word b, bool carry_in) {
-        Word sum = 0;
-        bool carry = carry_in;
-        bool carry_into_msb = false;
-
-        for (unsigned bit = 0; bit < WIDTH; ++bit) {
-            const bool a_bit = ((a >> bit) & 1u) != 0;
-            const bool b_bit = ((b >> bit) & 1u) != 0;
-            const bool p = a_bit ^ b_bit;
-            const bool g = a_bit && b_bit;
-
-            if (bit == WIDTH - 1) {
-                carry_into_msb = carry;
-            }
-
-            if (p ^ carry) {
-                sum |= Word{1} << bit;
-            }
-            carry = g || (p && carry);
+    // carries[i] is the carry into bit i, carries[n] the carry out
+    static std::vector<Bit> ripple_carries(Circuit& c, const Bus& g, const Bus& p, Bit carry_in) {
+        std::vector<Bit> carries{carry_in};
+        for (unsigned i = 0; i < g.size(); i++) {
+            carries.push_back(c.or_gate(g[i], c.and_gate(p[i], carries[i])));
         }
-
-        const bool overflow = carry_into_msb ^ carry;
-        return {sum, carry, overflow};
+        return carries;
     }
 
-    // 2. Carry Select Adder (Slides 12-14)
-    // Divides 32 bits into blocks of size k = 4 (8 blocks total).
-    // Blocks 1-7 compute dual sums assuming Cin=0 and Cin=1 in parallel,
-    // selecting the correct sum via a 2:1 mux when the block carry arrives: O(sqrt(n)) delay
-    static AdderResult carry_select(Word a, Word b, bool carry_in) {
-        constexpr unsigned K = 4; // Block size
-        constexpr unsigned NUM_BLOCKS = WIDTH / K; // 8 blocks
-
-        Word sum = 0;
-        bool current_carry = carry_in;
-        bool carry_into_msb = false;
-
-        for (unsigned blk = 0; blk < NUM_BLOCKS; ++blk) {
-            const unsigned shift = blk * K;
-            const Word mask = (Word{1} << K) - 1u;
-            const Word a_blk = (a >> shift) & mask;
-            const Word b_blk = (b >> shift) & mask;
-
-            if (blk == 0) {
-                bool blk_carry = current_carry;
-                Word blk_sum = 0;
-                for (unsigned i = 0; i < K; ++i) {
-                    const bool a_bit = ((a_blk >> i) & 1u) != 0;
-                    const bool b_bit = ((b_blk >> i) & 1u) != 0;
-                    const bool p = a_bit ^ b_bit;
-                    const bool g = a_bit && b_bit;
-                    if (p ^ blk_carry) {
-                        blk_sum |= Word{1} << i;
-                    }
-                    blk_carry = g || (p && blk_carry);
+    // Slide 18 for up to 4 bits: c(i+1) = g(i) + p(i)g(i-1) + ... + p(i)...p(0)c(0), every carry at once
+    static std::vector<Bit> group_carries(Circuit& c, const Bus& g, const Bus& p, Bit carry_in) {
+        std::vector<Bit> carries{carry_in};
+        for (int i = 0; i < int(g.size()); i++) {
+            std::vector<Bit> terms;
+            for (int j = i; j >= -1; j--) {
+                std::vector<Bit> factors;
+                if (j >= 0) {
+                    factors.push_back(g[j]);
+                } else {
+                    factors.push_back(carry_in);
                 }
-                sum |= blk_sum << shift;
-                current_carry = blk_carry;
+                for (int k = j + 1; k <= i; k++) {
+                    factors.push_back(p[k]);
+                }
+                terms.push_back(c.and_tree(factors));
+            }
+            carries.push_back(c.or_tree(terms));
+        }
+        return carries;
+    }
+
+    // A group generates a carry (G) or passes one through (P)
+    static void group_signals(Circuit& c, const Bus& g, const Bus& p, Bit& G, Bit& P) {
+        std::vector<Bit> terms;
+        for (int j = int(g.size()) - 1; j >= 0; j--) {
+            std::vector<Bit> factors{g[j]};
+            for (int k = j + 1; k < int(g.size()); k++) {
+                factors.push_back(p[k]);
+            }
+            terms.push_back(c.and_tree(factors));
+        }
+        G = c.or_tree(terms);
+        P = c.and_tree(std::vector<Bit>(p.begin(), p.end()));
+    }
+
+    // Hierarchical lookahead: groups of 4 bits give a G and a P each, and the carries into the
+    // groups come from the same lookahead one level up (groups of groups), until one group is left
+    static std::vector<Bit> lookahead_carries(Circuit& c, const Bus& g, const Bus& p, Bit carry_in) {
+        if (g.size() <= GROUP) {
+            return group_carries(c, g, p, carry_in);
+        }
+        Bus group_g;
+        Bus group_p;
+        for (unsigned start = 0; start < g.size(); start += GROUP) {
+            unsigned end = std::min<unsigned>(start + GROUP, g.size());
+            Bit G;
+            Bit P;
+            group_signals(c, Bus(g.begin() + start, g.begin() + end), Bus(p.begin() + start, p.begin() + end), G, P);
+            group_g.push_back(G);
+            group_p.push_back(P);
+        }
+        std::vector<Bit> into_group = lookahead_carries(c, group_g, group_p, carry_in);
+
+        std::vector<Bit> carries;
+        for (unsigned start = 0, group = 0; start < g.size(); start += GROUP, group++) {
+            unsigned end = std::min<unsigned>(start + GROUP, g.size());
+            std::vector<Bit> inside = group_carries(c, Bus(g.begin() + start, g.begin() + end),
+                                                    Bus(p.begin() + start, p.begin() + end), into_group[group]);
+            carries.insert(carries.end(), inside.begin(), inside.end() - 1);
+        }
+        carries.push_back(into_group.back());
+        return carries;
+    }
+
+    // Kogge-Stone: level k combines each bit's (G, P) with the one 2^k bits below it, so after
+    // log2(n) levels G(i), P(i) cover bits i..0; the carry into bit i+1 is G(i) + P(i)·carry_in
+    static std::vector<Bit> prefix_carries(Circuit& c, const Bus& g, const Bus& p, Bit carry_in) {
+        Bus G = g;
+        Bus P = p;
+        for (unsigned distance = 1; distance < g.size(); distance *= 2) {
+            Bus next_G = G;
+            Bus next_P = P;
+            for (unsigned i = distance; i < g.size(); i++) {
+                next_G[i] = c.or_gate(G[i], c.and_gate(P[i], G[i - distance]));
+                next_P[i] = c.and_gate(P[i], P[i - distance]);
+            }
+            G = next_G;
+            P = next_P;
+        }
+        std::vector<Bit> carries{carry_in};
+        for (unsigned i = 0; i < g.size(); i++) {
+            carries.push_back(c.or_gate(G[i], c.and_gate(P[i], carry_in)));
+        }
+        return carries;
+    }
+
+    // Carry select: block 0 ripples from carry_in; every other block ripples twice, for a carry-in of
+    // 0 and of 1, and a mux picks the sums and carry when the block's real carry-in arrives
+    static AdderOutput carry_select(Circuit& c, const Bus& g, const Bus& p, Bit carry_in) {
+        AdderOutput out;
+        Bit block_carry = carry_in;
+        for (unsigned start = 0; start < g.size(); start += GROUP) {
+            unsigned end = std::min<unsigned>(start + GROUP, g.size());
+            Bus block_g(g.begin() + start, g.begin() + end);
+            Bus block_p(p.begin() + start, p.begin() + end);
+            if (start == 0) {
+                std::vector<Bit> carries = ripple_carries(c, block_g, block_p, block_carry);
+                for (unsigned i = 0; i < block_g.size(); i++) {
+                    out.sum.push_back(c.xor_gate(block_p[i], carries[i]));
+                }
+                block_carry = carries.back();
             } else {
-                // Speculative RCA 0 (assuming Cin = 0)
-                Word sum0 = 0;
-                bool carry0 = false;
-                for (unsigned i = 0; i < K; ++i) {
-                    const bool a_bit = ((a_blk >> i) & 1u) != 0;
-                    const bool b_bit = ((b_blk >> i) & 1u) != 0;
-                    const bool p = a_bit ^ b_bit;
-                    const bool g = a_bit && b_bit;
-                    if (p ^ carry0) {
-                        sum0 |= Word{1} << i;
-                    }
-                    carry0 = g || (p && carry0);
+                std::vector<Bit> carries0 = ripple_carries(c, block_g, block_p, constant(false));
+                std::vector<Bit> carries1 = ripple_carries(c, block_g, block_p, constant(true));
+                for (unsigned i = 0; i < block_g.size(); i++) {
+                    Bit sum0 = c.xor_gate(block_p[i], carries0[i]);
+                    Bit sum1 = c.xor_gate(block_p[i], carries1[i]);
+                    out.sum.push_back(c.mux(block_carry, sum0, sum1));
                 }
-
-                // Speculative RCA 1 (assuming Cin = 1)
-                Word sum1 = 0;
-                bool carry1 = true;
-                for (unsigned i = 0; i < K; ++i) {
-                    const bool a_bit = ((a_blk >> i) & 1u) != 0;
-                    const bool b_bit = ((b_blk >> i) & 1u) != 0;
-                    const bool p = a_bit ^ b_bit;
-                    const bool g = a_bit && b_bit;
-                    if (p ^ carry1) {
-                        sum1 |= Word{1} << i;
-                    }
-                    carry1 = g || (p && carry1);
-                }
-
-                const Word selected_sum = current_carry ? sum1 : sum0;
-                sum |= selected_sum << shift;
-
-                if (blk == NUM_BLOCKS - 1) {
-                    bool c_msb0 = false;
-                    bool c_msb1 = true;
-                    for (unsigned i = 0; i < K - 1; ++i) {
-                        const bool a_bit = ((a_blk >> i) & 1u) != 0;
-                        const bool b_bit = ((b_blk >> i) & 1u) != 0;
-                        c_msb0 = (a_bit && b_bit) || ((a_bit ^ b_bit) && c_msb0);
-                        c_msb1 = (a_bit && b_bit) || ((a_bit ^ b_bit) && c_msb1);
-                    }
-                    carry_into_msb = current_carry ? c_msb1 : c_msb0;
-                }
-
-                current_carry = current_carry ? carry1 : carry0;
+                block_carry = c.mux(block_carry, carries0.back(), carries1.back());
             }
         }
-
-        const bool overflow = carry_into_msb ^ current_carry;
-        return {sum, current_carry, overflow};
-    }
-
-    // 3. Hierarchical Grouped CLA (k=4, 2-level) (Slides 18-25)
-    // Evaluates 8 4-bit CLA blocks with 4-bit lookahead generators (Slide 18)
-    // and a Level-2 Lookahead Carry Unit: O(log n) hierarchical delay
-    static AdderResult hierarchical_grouped_cla(Word a, Word b, bool carry_in) {
-        constexpr unsigned K = 4;
-        constexpr unsigned NUM_BLOCKS = WIDTH / K; // 8 blocks
-
-        std::array<bool, NUM_BLOCKS> group_g{};
-        std::array<bool, NUM_BLOCKS> group_p{};
-        std::array<std::array<bool, K>, NUM_BLOCKS> bit_g{};
-        std::array<std::array<bool, K>, NUM_BLOCKS> bit_p{};
-
-        // Level 1: compute bit-level and block-level G and P for each 4-bit block (Slide 18)
-        for (unsigned blk = 0; blk < NUM_BLOCKS; ++blk) {
-            for (unsigned i = 0; i < K; ++i) {
-                const unsigned bit = blk * K + i;
-                const bool a_bit = ((a >> bit) & 1u) != 0;
-                const bool b_bit = ((b >> bit) & 1u) != 0;
-                bit_g[blk][i] = a_bit && b_bit;
-                bit_p[blk][i] = a_bit ^ b_bit;
-            }
-
-            const auto& g = bit_g[blk];
-            const auto& p = bit_p[blk];
-
-            // Slide 18 4-bit Block Lookahead equations:
-            // G_blk = G3 + P3*G2 + P3*P2*G1 + P3*P2*P1*G0
-            // P_blk = P3*P2*P1*P0
-            group_g[blk] = g[3] || (p[3] && g[2]) || (p[3] && p[2] && g[1]) || (p[3] && p[2] && p[1] && g[0]);
-            group_p[blk] = p[3] && p[2] && p[1] && p[0];
-        }
-
-        // Level 2: Lookahead Carry Generator for block carry-ins (C0, C4, C8, ..., C28)
-        std::array<bool, NUM_BLOCKS + 1> block_cin{};
-        block_cin[0] = carry_in;
-        for (unsigned blk = 0; blk < NUM_BLOCKS; ++blk) {
-            block_cin[blk + 1] = group_g[blk] || (group_p[blk] && block_cin[blk]);
-        }
-
-        Word sum = 0;
-        bool carry_into_msb = false;
-
-        // Inside each block, evaluate carries and sum bits using Slide 18 equations
-        for (unsigned blk = 0; blk < NUM_BLOCKS; ++blk) {
-            const auto& g = bit_g[blk];
-            const auto& p = bit_p[blk];
-            const bool c0 = block_cin[blk];
-
-            // Slide 18 4-bit carry lookahead equations
-            const bool c1 = g[0] || (p[0] && c0);
-            const bool c2 = g[1] || (p[1] && g[0]) || (p[1] && p[0] && c0);
-            const bool c3 = g[2] || (p[2] && g[1]) || (p[2] && p[1] && g[0]) || (p[2] && p[1] && p[0] && c0);
-
-            const std::array<bool, K> block_carries = {c0, c1, c2, c3};
-
-            for (unsigned i = 0; i < K; ++i) {
-                const unsigned bit = blk * K + i;
-                if (bit == WIDTH - 1) {
-                    carry_into_msb = block_carries[i];
-                }
-                if (p[i] ^ block_carries[i]) {
-                    sum |= Word{1} << bit;
-                }
-            }
-        }
-
-        const bool final_carry = block_cin[NUM_BLOCKS];
-        const bool overflow = carry_into_msb ^ final_carry;
-        return {sum, final_carry, overflow};
-    }
-
-    // 4. Parallel Prefix Tree CLA (Kogge-Stone Tree) (Slides 20-25)
-    // 5-level prefix carry tree for minimal theoretical logic depth: log2(32) = 5
-    static AdderResult prefix_tree_cla(Word a, Word b, bool carry_in) {
-        std::array<bool, WIDTH> bit_propagate{};
-        std::array<bool, WIDTH> group_propagate{};
-        std::array<bool, WIDTH> group_generate{};
-
-        for (unsigned bit = 0; bit < WIDTH; ++bit) {
-            const bool a_bit = ((a >> bit) & 1u) != 0;
-            const bool b_bit = ((b >> bit) & 1u) != 0;
-            bit_propagate[bit] = a_bit ^ b_bit;
-            group_propagate[bit] = bit_propagate[bit];
-            group_generate[bit] = a_bit && b_bit;
-        }
-
-        for (unsigned distance = 1; distance < WIDTH; distance <<= 1) {
-            const auto prev_g = group_generate;
-            const auto prev_p = group_propagate;
-            for (unsigned bit = distance; bit < WIDTH; ++bit) {
-                group_generate[bit] = prev_g[bit] || (prev_p[bit] && prev_g[bit - distance]);
-                group_propagate[bit] = prev_p[bit] && prev_p[bit - distance];
-            }
-        }
-
-        Word sum = 0;
-        bool carry = carry_in;
-        bool carry_into_msb = false;
-
-        for (unsigned bit = 0; bit < WIDTH; ++bit) {
-            if (bit == WIDTH - 1) {
-                carry_into_msb = carry;
-            }
-            if (bit_propagate[bit] ^ carry) {
-                sum |= Word{1} << bit;
-            }
-            carry = group_generate[bit] || (group_propagate[bit] && carry_in);
-        }
-
-        const bool overflow = carry_into_msb ^ carry;
-        return {sum, carry, overflow};
+        out.carry_out = block_carry;
+        return out;
     }
 
 public:
-    static AdderResult add(Word a, Word b, bool carry_in, AdderAlgorithm algorithm) {
-        switch (algorithm) {
-            case AdderAlgorithm::RippleCarry:
-                return ripple_carry(a, b, carry_in);
-            case AdderAlgorithm::CarrySelect:
-                return carry_select(a, b, carry_in);
-            case AdderAlgorithm::PrefixTreeCLA:
-                return prefix_tree_cla(a, b, carry_in);
-            case AdderAlgorithm::HierarchicalGroupedCLA:
-            default:
-                return hierarchical_grouped_cla(a, b, carry_in);
+    static AdderOutput add(Circuit& c, const Bus& a, const Bus& b, Bit carry_in, AdderAlgorithm algorithm) {
+        Bus g;
+        Bus p;
+        for (unsigned i = 0; i < a.size(); i++) {
+            g.push_back(c.and_gate(a[i], b[i]));
+            p.push_back(c.xor_gate(a[i], b[i]));
         }
+        if (algorithm == AdderAlgorithm::CarrySelect) {
+            return carry_select(c, g, p, carry_in);
+        }
+
+        std::vector<Bit> carries;
+        if (algorithm == AdderAlgorithm::RippleCarry) {
+            carries = ripple_carries(c, g, p, carry_in);
+        } else if (algorithm == AdderAlgorithm::HierarchicalGroupedCLA) {
+            carries = lookahead_carries(c, g, p, carry_in);
+        } else {
+            carries = prefix_carries(c, g, p, carry_in);
+        }
+        AdderOutput out;
+        for (unsigned i = 0; i < a.size(); i++) {
+            out.sum.push_back(c.xor_gate(p[i], carries[i]));
+        }
+        out.carry_out = carries.back();
+        return out;
     }
 
-    static constexpr AdderCharacteristics characteristics(AdderAlgorithm algorithm) {
+    // a + b, or a - b = a + ~b + 1 when subtract is 1 (Slide 6): an XOR on every bit of b
+    static AdderOutput add_or_subtract(Circuit& c, const Bus& a, const Bus& b, Bit subtract, AdderAlgorithm algorithm) {
+        Bus b_in;
+        for (const Bit& bit : b) {
+            b_in.push_back(c.xor_gate(bit, subtract));
+        }
+        return add(c, a, b_in, subtract, algorithm);
+    }
+
+    static AdderResult add(Word a, Word b, bool carry_in, AdderAlgorithm algorithm) {
+        Circuit c;
+        AdderOutput out = add(c, to_bus(a), to_bus(b), constant(carry_in), algorithm);
+        AdderResult result;
+        result.sum = Word(to_number(out.sum));
+        result.carry_out = out.carry_out.value;
+        // Signed overflow: both inputs have the same sign and the sum has the other one
+        bool a_negative = (a >> (isa::WORD_BITS - 1)) != 0;
+        bool b_negative = (b >> (isa::WORD_BITS - 1)) != 0;
+        bool sum_negative = (result.sum >> (isa::WORD_BITS - 1)) != 0;
+        result.overflow = a_negative == b_negative && sum_negative != a_negative;
+        return result;
+    }
+
+    static const char* name(AdderAlgorithm algorithm) {
         switch (algorithm) {
             case AdderAlgorithm::RippleCarry:
-                return {"Ripple-Carry Adder", 32, 32, 64.0};
+                return "Ripple-carry";
             case AdderAlgorithm::CarrySelect:
-                return {"Carry-Select Adder (k=4)", 12, 56, 24.0};
-            case AdderAlgorithm::PrefixTreeCLA:
-                return {"Parallel-Prefix Tree CLA (Kogge-Stone)", 5, 129, 8.0};
+                return "Carry-select (blocks of 4)";
             case AdderAlgorithm::HierarchicalGroupedCLA:
-            default:
-                return {"Hierarchical Grouped CLA (k=4, 2-Level)", 8, 80, 10.0};
+                return "Hierarchical carry-lookahead (groups of 4)";
+            case AdderAlgorithm::PrefixTreeCLA:
+                return "Kogge-Stone prefix tree";
         }
+        return "";
+    }
+
+    // A 32-bit add, measured: which gates exist and when they settle does not depend on the operands
+    static AdderCharacteristics characteristics(AdderAlgorithm algorithm) {
+        Circuit c;
+        add(c, to_bus(0), to_bus(0), constant(false), algorithm);
+        c.clock();
+        AdderCharacteristics result;
+        result.name = name(algorithm);
+        result.delay = c.delay;
+        result.area = c.area;
+        return result;
     }
 };
-
-} // namespace risc::alu
+}

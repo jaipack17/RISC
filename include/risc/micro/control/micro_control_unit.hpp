@@ -52,11 +52,15 @@ public:
     SwitchUnit switch_unit;
     MicroControlSignals signals; // signals of the last microinstruction (for display)
     bool halted = false;
+    unsigned alu_wait = 0; // µcycles the ALU still needs for its command; the µpc holds until then
+    unsigned upc_after_alu = 0;
 
     void reset() {
         upc = 0;
         signals = MicroControlSignals{};
         halted = false;
+        alu_wait = 0;
+        upc_after_alu = 0;
     }
 
     // Store microcode in the microprogram memory, starting at address 0
@@ -78,10 +82,23 @@ public:
         if (halted) {
             return;
         }
+        if (alu_wait > 0) {
+            alu_wait--;
+            if (alu_wait == 0) {
+                upc = upc_after_alu;
+            }
+            return;
+        }
         MicroWord word = microprogram[upc];
         signals = micro_decode.decode(word);
         apply_signals(signals, datapath, memory);
-        upc = next_upc(signals, datapath);
+        unsigned next = next_upc(signals, datapath);
+        if (runs_alu(signals.args) && datapath.alu.microcycles > 1) {
+            alu_wait = datapath.alu.microcycles - 1;
+            upc_after_alu = next;
+        } else {
+            upc = next;
+        }
     }
 };
 }

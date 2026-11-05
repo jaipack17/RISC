@@ -5,7 +5,7 @@
 namespace risc::six_stage_micro {
 
 // Finds which registers an instruction reads in OF1 and OF2, and which register it writes in RW,
-// straight from its instruction bits (Sarangi §10.6)
+// straight from its instruction bits
 class InterlockUnit {
 private:
     static unsigned field(isa::Word ir, unsigned pos, unsigned width) {

@@ -32,11 +32,10 @@ import {
   useGhosts,
 } from "./diagram";
 
-// Block diagram of the six-stage pipelined microprogrammed processor, drawn in the style of
-// Sarangi's figures 9.22 (microprogrammed data path) and 10.17 (pipeline with interlocks):
-// per-stage µcontrol units, per-stage local buses with their registers, pipeline latches as
-// vertical bars, memories and the register file below, the branch and write-back paths as
-// thick feedback wires, and the beat controller with its stall / bubble / flush lines on top.
+// Block diagram of the six-stage pipelined microprogrammed processor: per-stage µcontrol
+// units, per-stage local buses with their registers, pipeline latches as vertical bars,
+// memories and the register file below, the branch and write-back paths as thick feedback
+// wires, and the beat controller with its stall / bubble / flush lines on top.
 // In the black-box view the stages are solid blocks that hide their buses and registers;
 // each instruction is a token that slides to the next stage at the end of a beat.
 
@@ -154,7 +153,7 @@ export default function Datapath({ state, program, blackBox }: { state: CpuState
     <svg viewBox={`0 0 ${W} ${H}`} className={"dp" + (blackBox ? " blackbox" : "")}>
       <Markers />
 
-      {/* beat controller and interlock unit (Fig 10.17's Data-lock / Branch-lock units) */}
+      {/* beat controller and interlock unit (data-lock and branch-lock) */}
       <g className={"controller" + (stallAt >= 0 || branch ? " on" : "")}>
         <rect x={sx(0)} y={CTRL_Y} width={W - 2 * LEFT} height={CTRL_H} />
         <text x={sx(0) + 12} y={CTRL_Y + 17} className="unit-title left">
@@ -200,6 +199,9 @@ export default function Datapath({ state, program, blackBox }: { state: CpuState
         if (st.ran) {
           status = `ran µ${st.lastUpc}`;
         }
+        if (st.ran && st.aluWait > 0) {
+          status = `µ${st.lastUpc} · ALU busy, ${st.aluWait} more`;
+        }
         let where = "";
         if (word) {
           where = word.sourceLine > 0 ? `line ${word.sourceLine}${word.part ? " · part" : ""}` : "end of section";
@@ -223,7 +225,7 @@ export default function Datapath({ state, program, blackBox }: { state: CpuState
                 {word ? word.text.slice(0, 27) : ""}
               </text>
             </g>
-            {/* control: µcontrol drives its stage's bus (the double arrow of Fig 9.22) */}
+            {/* control: µcontrol drives its stage's bus (the double arrow) */}
             <Wire d={`M${sx(i) + 46} ${UC_Y + UC_H} L${sx(i) + 46} ${STAGE_Y}`} on={st.ran} kind="control" flow={false} />
             {!blackBox && <Wire d={`M${sx(i) + 46} ${STAGE_Y + 52} L${sx(i) + 46} ${BUS_Y}`} on={st.ran} kind="control" flow={false} />}
           </g>
@@ -431,7 +433,7 @@ export default function Datapath({ state, program, blackBox }: { state: CpuState
         );
       })}
 
-      {/* branch: EX's branch unit sends the target back to IF's pc (red, like Fig 10.17) */}
+      {/* branch: EX's branch unit sends the target back to IF's pc (red) */}
       <Wire
         d={`M${sx(3) + 158} ${STAGE_Y} L${sx(3) + 158} ${BRANCH_Y} L${sx(0) + SW - 84} ${BRANCH_Y} L${sx(0) + SW - 84} ${STAGE_Y}`}
         on={branch}
@@ -506,7 +508,7 @@ export default function Datapath({ state, program, blackBox }: { state: CpuState
         same 64 KB memory as IF
       </text>
 
-      {/* write-back: RW writes the register file (red, like Fig 10.17) */}
+      {/* write-back: RW writes the register file (red) */}
       <Wire
         d={`M${slotX(5, "regData")} ${portY} L${slotX(5, "regData")} ${WB_Y} L${writePortX} ${WB_Y} L${writePortX} ${MEM_Y + MEM_H}`}
         on={write}

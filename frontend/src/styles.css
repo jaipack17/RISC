@@ -1,4 +1,4 @@
-/* Black, flat, square. Colours follow Sarangi's figures: teal buses, peach registers,
+/* Black, flat, square. Colours: teal buses, peach registers,
    pink memories, green latches, lime µcontrol, red feedback paths, blue control lines. */
 
 :root {
@@ -1330,4 +1330,86 @@ p {
 
 .spacetime tr.beat-cycles th.stalled {
   color: var(--wait);
+}
+
+/* ---- ALU page ---- */
+
+.alu-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+  font: 12px var(--mono);
+}
+
+.alu-table th {
+  font: 11px var(--sans);
+  color: var(--dim);
+  text-align: right;
+  padding: 0 10px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.alu-table td {
+  text-align: right;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.alu-table th.left,
+.alu-table td.left {
+  text-align: left;
+}
+
+.alu-table td.strong {
+  color: var(--active);
+}
+
+.alu-table tr.group-start td {
+  border-top: 1px solid var(--dim);
+}
+
+.alu-table .tag {
+  margin-left: 8px;
+}
+
+.alu-table .value {
+  margin-left: 8px;
+}
+
+.alu-bar {
+  display: inline-block;
+  vertical-align: middle;
+  width: 120px;
+  height: 12px;
+}
+
+.alu-table.runs .alu-bar {
+  width: 70px;
+}
+
+.alu-bar .seg {
+  height: 100%;
+}
+
+.adder-choice {
+  margin-bottom: 12px;
+}
+
+.tag.busy {
+  color: var(--seg-flush);
+  border-color: var(--seg-flush);
+}
+
+.alu-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+}
+
+.alu-choice select {
+  font-size: 11px;
+  padding: 2px 4px;
 }

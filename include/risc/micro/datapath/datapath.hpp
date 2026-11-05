@@ -13,10 +13,10 @@
 
 namespace risc::micro {
 
-// Transfer multiplexer: what goes onto the read bus (Figure 9.23)
+// Transfer multiplexer: what goes onto the read bus
 enum class TransferMux : std::uint8_t { WriteBus, Immediate, MicroAdder };
 
-// Figure 9.22: all the units, joined by the shared bus of Figure 9.23
+// The microprogrammed datapath: all the units, joined by the shared bus
 class Datapath {
 private:
     // The value a register puts on the write bus (0 if it is not connected to it)

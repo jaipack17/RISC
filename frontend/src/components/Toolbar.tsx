@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { CpuState, ProgramInfo } from "../types";
-import { hex } from "../types";
+import type { AdderKey, AluConfig, CpuState, DividerKey, MultiplierKey, ProgramInfo } from "../types";
+import { ADDER_NAMES, DIVIDER_NAMES, MULTIPLIER_NAMES, hex } from "../types";
 
 interface Props {
   pages: React.ReactNode; // the Simulator | Compare switch
@@ -17,6 +17,7 @@ interface Props {
   onRun: () => void;
   onPlay: () => void;
   onSpeed: (ms: number) => void;
+  onAluConfig: (config: AluConfig) => void; // restarts the program
 }
 
 export default function Toolbar(props: Props) {
@@ -110,6 +111,34 @@ export default function Toolbar(props: Props) {
               µcycles/instr <b>{(state.counters.microcycles / state.counters.instructions).toFixed(2)}</b>
             </span>
           )}
+          <span className="spacer" />
+          <span className="alu-choice" title="The ALU's algorithms. Changing one starts the program again.">
+            ALU
+            <select value={state.alu.adder} onChange={(e) => props.onAluConfig({ ...state.alu, adder: e.target.value as AdderKey })}>
+              {Object.entries(ADDER_NAMES).map(([key, name]) => (
+                <option key={key} value={key}>
+                  {name} adder
+                </option>
+              ))}
+            </select>
+            <select
+              value={state.alu.multiplier}
+              onChange={(e) => props.onAluConfig({ ...state.alu, multiplier: e.target.value as MultiplierKey })}
+            >
+              {Object.entries(MULTIPLIER_NAMES).map(([key, name]) => (
+                <option key={key} value={key}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <select value={state.alu.divider} onChange={(e) => props.onAluConfig({ ...state.alu, divider: e.target.value as DividerKey })}>
+              {Object.entries(DIVIDER_NAMES).map(([key, name]) => (
+                <option key={key} value={key}>
+                  {name} divider
+                </option>
+              ))}
+            </select>
+          </span>
         </div>
       )}
       {editing && (

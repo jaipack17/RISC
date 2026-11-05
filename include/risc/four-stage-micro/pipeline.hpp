@@ -17,7 +17,7 @@ inline constexpr unsigned NUM_STAGES = 4;
 // For display and the Compare page's cycle accounting only; the processor never reads it.
 enum class BubbleReason : std::uint8_t { Fill, Stall, Flush, Drain };
 
-// Everything an instruction carries from one stage to the next (Sarangi §10.2.3).
+// Everything an instruction carries from one stage to the next.
 // A pipeline latch holds one packet. bubble == true means the latch holds no instruction.
 struct InstructionPacket {
     bool bubble = true;

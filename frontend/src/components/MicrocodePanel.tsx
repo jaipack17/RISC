@@ -69,6 +69,11 @@ export default function MicrocodePanel({ program, state }: { program: ProgramInf
                   <td className="left mono">
                     {w.text}
                     {w.part && <span className="tag">{names[stage]} part</span>}
+                    {ranHere && st.aluWait > 0 && (
+                      <span className="tag busy">
+                        ALU busy · {st.aluWait} more µcycle{st.aluWait === 1 ? "" : "s"}
+                      </span>
+                    )}
                   </td>
                 </tr>
               );

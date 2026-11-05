@@ -223,7 +223,7 @@ Comparer::Comparer(const std::string& microcode_path) {
     six_programs = microassembler::split(microprogram);
 }
 
-json Comparer::compare(const std::string& source, bool timeline) const {
+json Comparer::compare(const std::string& source, bool timeline, const alu::AluConfig& alu_config) const {
     assembler::Assembler assembler;
     std::vector<isa::Word> program = assembler.assemble(source, "");
     if (program.size() * isa::WORD_BYTES > machine::INSTRUCTION_END - machine::INSTRUCTION_BASE) {
@@ -245,6 +245,8 @@ json Comparer::compare(const std::string& source, bool timeline) const {
     four->write_stage_microprograms(four_programs);
     auto six = std::make_unique<six_stage_micro::CPU>(*six_memory);
     six->write_stage_microprograms(six_programs);
+    four->datapath.alu.configure(alu_config);
+    six->datapath.alu.configure(alu_config);
 
     Outcome four_outcome;
     Outcome six_outcome;
@@ -257,6 +259,7 @@ json Comparer::compare(const std::string& source, bool timeline) const {
     // The sequential microprogrammed processor
     auto seq_datapath = std::make_unique<micro::Datapath>();
     auto seq_control = std::make_unique<micro::MicroControlUnit>();
+    seq_datapath->alu.configure(alu_config);
     seq_control->write_microprogram_words(microprogram.words);
     for (const microassembler::Entry& entry : microprogram.entries) {
         seq_control->switch_unit.set_start(entry.opcode, entry.address);

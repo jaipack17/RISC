@@ -1,4 +1,4 @@
-import type { BenchmarkInfo, CompareResult, CpuState, Processor, ProgramInfo } from "./types";
+import type { AluConfig, AluReport, BenchmarkInfo, CompareResult, CpuState, Processor, ProgramInfo } from "./types";
 
 // Calls to the C++ backend (backend/server.cpp). The six-stage processor answers unless processor is "four".
 
@@ -60,4 +60,14 @@ export function compareProgram(program: string): Promise<CompareResult> {
 // Every benchmark on the three processors (no timelines)
 export function runBenchmark(): Promise<CompareResult[]> {
   return request("GET", "/benchmark");
+}
+
+// Both processors switch to these ALU algorithms and start the program again
+export function setAluConfig(processor: Processor, config: AluConfig): Promise<CpuState> {
+  return request("POST", "/alu-config?processor=" + processor, config);
+}
+
+// The ALU page (slow the first time: every benchmark runs once per algorithm)
+export function getAluReport(): Promise<AluReport> {
+  return request("GET", "/alu");
 }

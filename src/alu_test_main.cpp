@@ -270,17 +270,13 @@ void test_barrel_shifter() {
     EXPECT_EQ(alu.shift(neg, 4, ShiftOp::Asr), 0xF8000000u);
 }
 
+// Every figure is counted from the gates the algorithms build (see alu/gates.hpp)
 void print_alu_characteristics() {
     std::cout << "\n============================================================\n";
-    std::cout << "        RISC201 ALU Structural Characterization Report       \n";
+    std::cout << "        RISC201 ALU: delays and sizes counted from the gates\n";
     std::cout << "============================================================\n";
-
-    std::cout << "\n[1] 32-bit Adders / Subtractors:\n";
-    std::cout << std::left << std::setw(45) << "Algorithm"
-              << std::setw(14) << "Logic Depth"
-              << std::setw(14) << "Nodes (FAs)"
-              << "FO4 Delay\n";
-    std::cout << std::string(82, '-') << '\n';
+    std::cout << "Unit-gate model: AND/OR 1 delay 1 area, XOR 2 and 2, 2:1 mux 2 and 3, inverter free.\n";
+    std::cout << "One µcycle = " << microcycle_length() << " gate delays (the longest single step with the fastest adder).\n";
 
     const AdderAlgorithm adders[] = {
         AdderAlgorithm::RippleCarry,
@@ -288,49 +284,42 @@ void print_alu_characteristics() {
         AdderAlgorithm::HierarchicalGroupedCLA,
         AdderAlgorithm::PrefixTreeCLA
     };
-    for (auto a : adders) {
-        auto c = Adders::characteristics(a);
-        std::cout << std::left << std::setw(45) << c.name
-                  << std::setw(14) << c.logic_depth
-                  << std::setw(14) << c.operator_nodes
-                  << c.estimated_fo4 << " FO4\n";
+    std::cout << "\n[1] 32-bit adders\n";
+    std::cout << std::left << std::setw(46) << "Algorithm" << std::setw(8) << "Delay" << std::setw(8) << "Area"
+              << std::setw(12) << "cmp delay" << std::setw(12) << "add µcyc" << "cmp µcyc\n";
+    std::cout << std::string(96, '-') << '\n';
+    for (AdderAlgorithm a : adders) {
+        AdderCharacteristics c = measure_adder(a);
+        std::cout << std::left << std::setw(46) << c.name << std::setw(8) << c.delay << std::setw(8) << c.area
+                  << std::setw(12) << c.compare_delay << std::setw(12) << c.add_microcycles << c.compare_microcycles << '\n';
     }
 
-    std::cout << "\n[2] 32-bit Multipliers:\n";
-    std::cout << std::left << std::setw(50) << "Algorithm"
-              << std::setw(12) << "Cycles"
-              << std::setw(14) << "Part. Prods"
-              << "FO4 / step\n";
-    std::cout << std::string(84, '-') << '\n';
-
-    const MultiplierAlgorithm mults[] = {
+    const MultiplierAlgorithm multipliers[] = {
         MultiplierAlgorithm::ShiftAdd,
         MultiplierAlgorithm::BoothRadix2,
         MultiplierAlgorithm::BoothRadix4
     };
-    for (auto m : mults) {
-        auto c = Multipliers::characteristics(m);
-        std::cout << std::left << std::setw(50) << c.name
-                  << std::setw(12) << c.cycles
-                  << std::setw(14) << c.partial_products
-                  << c.estimated_fo4_per_step << " FO4\n";
-    }
-
-    std::cout << "\n[3] 32-bit Dividers:\n";
-    std::cout << std::left << std::setw(45) << "Algorithm"
-              << std::setw(12) << "Cycles"
-              << "Conditional Restore\n";
-    std::cout << std::string(72, '-') << '\n';
-
-    const DividerAlgorithm divs[] = {
+    const DividerAlgorithm dividers[] = {
         DividerAlgorithm::Restoring,
         DividerAlgorithm::NonRestoring
     };
-    for (auto d : divs) {
-        auto c = Dividers::characteristics(d);
-        std::cout << std::left << std::setw(45) << c.name
-                  << std::setw(12) << c.cycles
-                  << (c.conditional_restore ? "Yes (Slide 34)" : "No") << '\n';
+    for (AdderAlgorithm a : adders) {
+        std::cout << "\n[2] Multipliers and dividers with the " << Adders::name(a) << " adder (µcycles per operation)\n";
+        std::cout << std::left << std::setw(46) << "Algorithm" << std::setw(12) << "Step delay" << std::setw(8) << "Area"
+                  << std::setw(8) << "Min" << std::setw(10) << "Average" << "Max\n";
+        std::cout << std::string(92, '-') << '\n';
+        for (MultiplierAlgorithm m : multipliers) {
+            IterativeCharacteristics c = measure_multiplier(m, a);
+            std::cout << std::left << std::setw(46) << c.name << std::setw(12) << c.step_delay << std::setw(8) << c.area
+                      << std::setw(8) << c.min_microcycles << std::setw(10) << std::fixed << std::setprecision(1)
+                      << c.average_microcycles << c.max_microcycles << '\n';
+        }
+        for (DividerAlgorithm d : dividers) {
+            IterativeCharacteristics c = measure_divider(d, a);
+            std::cout << std::left << std::setw(46) << c.name << std::setw(12) << c.step_delay << std::setw(8) << c.area
+                      << std::setw(8) << c.min_microcycles << std::setw(10) << std::fixed << std::setprecision(1)
+                      << c.average_microcycles << c.max_microcycles << '\n';
+        }
     }
     std::cout << "============================================================\n\n";
 }

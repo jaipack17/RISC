@@ -19,14 +19,20 @@ endif()
 add_library(risc_isa INTERFACE)
 target_include_directories(risc_isa INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+add_library(risc_disassembler STATIC src/disassembler/disassembler.cpp)
+target_link_libraries(risc_disassembler PUBLIC risc_isa)
+
 add_library(risc_visualizer STATIC src/visualizer/visualizer.cpp)
-target_link_libraries(risc_visualizer PUBLIC risc_isa)
+target_link_libraries(risc_visualizer PUBLIC risc_isa risc_disassembler)
 
 add_library(risc_assembler STATIC src/assembler/assembler.cpp)
 target_link_libraries(risc_assembler PUBLIC risc_isa)
 
 add_executable(risc_asm src/assembler_main.cpp)
 target_link_libraries(risc_asm PRIVATE risc_assembler)
+
+add_executable(risc_disasm src/disassembler_main.cpp)
+target_link_libraries(risc_disasm PRIVATE risc_disassembler risc_assembler)
 
 add_library(risc_microassembler STATIC src/microassembler/microassembler.cpp src/microassembler/splitter.cpp
             src/microassembler/four_stage_splitter.cpp)

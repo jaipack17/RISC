@@ -1,138 +1,128 @@
 #pragma once
 
-#include <cstdint>
-
+#include "risc/alu/adders.hpp"
 #include "risc/alu/alu_types.hpp"
+#include "risc/alu/gates.hpp"
 #include "risc/isa/isa_config.hpp"
 
 namespace risc::alu {
 
+// Sequential multipliers: one step per clock, each step at most one pass through the adder.
+// They give the low 32 bits of the product. The multiplicand is shifted left one place per bit
+// of the multiplier, and the product register adds it in (the low 32 bits of the textbook's
+// [A, Q] register pair).
 class Multipliers {
 private:
-    static Word magnitude(Word val) {
-        const bool negative = (val >> (isa::WORD_BITS - 1)) != 0;
-        return negative ? Word{0} - val : val;
+    static bool negative(Word value) {
+        return (value >> (isa::WORD_BITS - 1)) != 0;
     }
 
-    // 1. Unsigned Shift-and-Add with Sign Negation (Slides 27-29, Solution 1)
-    static Word shift_add(Word a, Word b) {
-        const bool a_neg = (a >> (isa::WORD_BITS - 1)) != 0;
-        const bool b_neg = (b >> (isa::WORD_BITS - 1)) != 0;
-        const Word abs_a = magnitude(a);
-        const Word abs_b = magnitude(b);
+    // One step: 0 - value
+    static Word negate(Circuit& c, Word value, AdderAlgorithm adder) {
+        AdderOutput out = Adders::add_or_subtract(c, to_bus(0), to_bus(value), constant(true), adder);
+        c.clock();
+        return Word(to_number(out.sum));
+    }
 
-        Word product = 0;
-        for (unsigned bit = 0; bit < isa::WORD_BITS; ++bit) {
-            if (((abs_b >> bit) & 1u) != 0) {
-                product += (abs_a << bit);
-            }
+    // Slides 27-29: multiply the magnitudes, then negate the product if the signs differ
+    static Word shift_add(Circuit& c, Word a, Word b, AdderAlgorithm adder) {
+        Word m = a;
+        if (negative(a)) {
+            m = negate(c, a, adder);
         }
-
-        if (a_neg ^ b_neg) {
-            product = Word{0} - product;
+        Word q = b;
+        if (negative(b)) {
+            q = negate(c, b, adder);
+        }
+        Word product = 0;
+        for (unsigned bit = 0; bit < isa::WORD_BITS; bit++) {
+            if (((q >> bit) & 1u) != 0) {
+                AdderOutput out = Adders::add_or_subtract(c, to_bus(product), to_bus(m << bit), constant(false), adder);
+                product = Word(to_number(out.sum));
+            }
+            c.clock(); // a step that adds nothing only shifts
+        }
+        if (negative(a) != negative(b)) {
+            product = negate(c, product, adder);
         }
         return product;
     }
 
-    // 2. Booth's Algorithm (Radix-2) (Slides 30-31, Solution 2)
-    // Directly multiplies two's complement signed binary numbers without pre-conversion.
-    // Inspects bit pairs (Q0, Q-1) and performs joint arithmetic right shifts across [A, Q, Q-1].
-    static Word booth_radix2(Word a, Word b) {
-        Word acc = 0;         // Accumulator A
-        Word q = b;           // Multiplier Q
-        unsigned q_minus_1 = 0; // Q-1 flip-flop
-        const Word m = a;     // Multiplicand M
-
-        for (unsigned step = 0; step < isa::WORD_BITS; ++step) {
-            const unsigned q_0 = q & 1u;
-            const unsigned pair = (q_0 << 1) | q_minus_1;
-
-            if (pair == 0b01) {
-                acc += m;
-            } else if (pair == 0b10) {
-                acc -= m;
+    // Slides 30-31: bit pair (Q0, Q-1) = 10 subtracts M, 01 adds M, 00 and 11 only shift.
+    // Works on two's complement directly.
+    static Word booth_radix2(Circuit& c, Word a, Word b, AdderAlgorithm adder) {
+        Word product = 0;
+        unsigned previous = 0; // Q-1
+        for (unsigned bit = 0; bit < isa::WORD_BITS; bit++) {
+            unsigned current = (b >> bit) & 1u;
+            if (current != previous) {
+                bool subtract = current == 1;
+                AdderOutput out = Adders::add_or_subtract(c, to_bus(product), to_bus(a << bit), constant(subtract), adder);
+                product = Word(to_number(out.sum));
             }
-            // 0b00 and 0b11: do nothing (skip addition/subtraction)
-
-            // Combined Arithmetic Right Shift: [acc, q, q_minus_1]
-            q_minus_1 = q_0;
-            const unsigned acc_lsb = acc & 1u;
-            q = (q >> 1) | (Word(acc_lsb) << (isa::WORD_BITS - 1));
-            // Arithmetic right shift on acc preserves sign bit
-            const bool acc_msb = (acc >> (isa::WORD_BITS - 1)) != 0;
-            acc = (acc >> 1) | (acc_msb ? (Word{1} << (isa::WORD_BITS - 1)) : 0u);
+            c.clock();
+            previous = current;
         }
-
-        // Low 32 bits of 64-bit product reside in Q
-        return q;
+        return product;
     }
 
-    // 3. Modified Booth Radix-4 (Overlapping 3-bit recoding)
-    // Evaluates 16 partial products with recoded factors in {-2, -1, 0, +1, +2}
-    static Word booth_radix4(Word a, Word b) {
+    // Radix-4 Booth: bits (2i+1, 2i, 2i-1) of the multiplier pick 0, ±M or ±2M; a mux picks
+    // M or 2M, and the adder adds or subtracts it. 16 steps.
+    static Word booth_radix4(Circuit& c, Word a, Word b, AdderAlgorithm adder) {
         Word product = 0;
-
-        for (unsigned group = 0; group < isa::WORD_BITS / 2; ++group) {
-            const unsigned low = (group == 0) ? 0u : ((b >> (2 * group - 1)) & 1u);
-            const unsigned mid = (b >> (2 * group)) & 1u;
-            const unsigned high = (b >> (2 * group + 1)) & 1u;
-            const unsigned code = (high << 2) | (mid << 1) | low;
-
-            Word partial = 0;
-            bool negate = false;
-
-            switch (code) {
-                case 0b001: // +1 * M
-                case 0b010:
-                    partial = a;
-                    break;
-                case 0b011: // +2 * M
-                    partial = a << 1;
-                    break;
-                case 0b100: // -2 * M
-                    partial = a << 1;
-                    negate = true;
-                    break;
-                case 0b101: // -1 * M
-                case 0b110:
-                    partial = a;
-                    negate = true;
-                    break;
-                default: // 000, 111: 0 * M
-                    break;
+        for (unsigned group = 0; group < isa::WORD_BITS / 2; group++) {
+            unsigned low = 0;
+            if (group > 0) {
+                low = (b >> (2 * group - 1)) & 1u;
             }
+            unsigned middle = (b >> (2 * group)) & 1u;
+            unsigned high = (b >> (2 * group + 1)) & 1u;
+            unsigned code = (high << 2) | (middle << 1) | low;
 
-            partial <<= (2 * group);
-            product += negate ? (Word{0} - partial) : partial;
+            bool add_anything = code != 0b000 && code != 0b111;
+            bool twice = code == 0b011 || code == 0b100;
+            bool subtract = high == 1;
+            if (add_anything) {
+                Bus once_m = to_bus(a << (2 * group));
+                Bus twice_m = to_bus(a << (2 * group + 1));
+                Bus chosen;
+                for (unsigned i = 0; i < isa::WORD_BITS; i++) {
+                    chosen.push_back(c.mux(constant(twice), once_m[i], twice_m[i]));
+                }
+                AdderOutput out = Adders::add_or_subtract(c, to_bus(product), chosen, constant(subtract), adder);
+                product = Word(to_number(out.sum));
+            }
+            c.clock();
         }
-
         return product;
     }
 
 public:
-    static Word multiply(Word a, Word b, MultiplierAlgorithm algorithm) {
-        switch (algorithm) {
-            case MultiplierAlgorithm::ShiftAdd:
-                return shift_add(a, b);
-            case MultiplierAlgorithm::BoothRadix2:
-                return booth_radix2(a, b);
-            case MultiplierAlgorithm::BoothRadix4:
-            default:
-                return booth_radix4(a, b);
+    static Word multiply(Circuit& c, Word a, Word b, MultiplierAlgorithm algorithm, AdderAlgorithm adder) {
+        if (algorithm == MultiplierAlgorithm::ShiftAdd) {
+            return shift_add(c, a, b, adder);
         }
+        if (algorithm == MultiplierAlgorithm::BoothRadix2) {
+            return booth_radix2(c, a, b, adder);
+        }
+        return booth_radix4(c, a, b, adder);
     }
 
-    static constexpr MultiplierCharacteristics characteristics(MultiplierAlgorithm algorithm) {
+    static Word multiply(Word a, Word b, MultiplierAlgorithm algorithm) {
+        Circuit c;
+        return multiply(c, a, b, algorithm, AluConfig{}.adder);
+    }
+
+    static const char* name(MultiplierAlgorithm algorithm) {
         switch (algorithm) {
             case MultiplierAlgorithm::ShiftAdd:
-                return {"Unsigned Shift-and-Add (Magnitude conversion)", 32, 32, 12.0};
+                return "Shift-and-add (magnitudes)";
             case MultiplierAlgorithm::BoothRadix2:
-                return {"Booth's Algorithm (Radix-2, Pair Checking)", 32, 32, 10.0};
+                return "Booth radix-2";
             case MultiplierAlgorithm::BoothRadix4:
-            default:
-                return {"Modified Booth (Radix-4, 16 Partial Products)", 16, 16, 14.0};
+                return "Booth radix-4";
         }
+        return "";
     }
 };
-
-} // namespace risc::alu
+}

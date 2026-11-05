@@ -1,122 +1,123 @@
 #pragma once
 
 #include <cstdint>
-#include <limits>
 
+#include "risc/alu/adders.hpp"
 #include "risc/alu/alu_types.hpp"
+#include "risc/alu/gates.hpp"
 #include "risc/exception.hpp"
 #include "risc/isa/isa_config.hpp"
 
 namespace risc::alu {
 
+// Sequential dividers on the magnitudes, one adder pass per step, 32 steps for the 32 quotient
+// bits. The signs are fixed after: the quotient is negative when the signs differ, and the
+// remainder takes the sign of the dividend (rounds toward zero, like C++).
 class Dividers {
 private:
-    static Word magnitude(Word val) {
-        const bool negative = (val >> (isa::WORD_BITS - 1)) != 0;
-        return negative ? Word{0} - val : val;
+    static constexpr unsigned WIDE = isa::WORD_BITS + 1; // the non-restoring remainder needs a sign bit
+
+    static bool negative(Word value) {
+        return (value >> (isa::WORD_BITS - 1)) != 0;
     }
 
-    // 1. Restoring Division Flowchart (Slides 33-34)
-    // 32-step shift-and-subtract recurrence:
-    // Left-shift [A, Q], trial subtract A = A - M, restore A = A + M if A < 0
-    static DivisionResult restoring(Word dividend, Word divisor) {
+    // One step: 0 - value
+    static Word negate(Circuit& c, Word value, AdderAlgorithm adder) {
+        AdderOutput out = Adders::add_or_subtract(c, to_bus(0), to_bus(value), constant(true), adder);
+        c.clock();
+        return Word(to_number(out.sum));
+    }
+
+    // Slides 33-34: shift [A, Q] left, A = A - M; if A went negative, add M back in another step
+    // (the restore) and Q0 = 0, else Q0 = 1. A < M always, so 2A + 1 fits in 32 bits, and
+    // A - M is negative exactly when the adder has no carry out.
+    static DivisionResult restoring(Circuit& c, Word dividend, Word divisor, AdderAlgorithm adder) {
+        Word a = 0;
         Word q = dividend;
-        std::uint64_t a = 0; // 64-bit to prevent overflow during intermediate addition/subtraction
-        const std::uint64_t m = divisor;
-
-        for (unsigned step = 0; step < isa::WORD_BITS; ++step) {
-            // Shift Left [A, Q] by 1
-            const unsigned q_msb = (q >> (isa::WORD_BITS - 1)) & 1u;
-            a = (a << 1) | q_msb;
+        for (unsigned step = 0; step < isa::WORD_BITS; step++) {
+            a = (a << 1) | (q >> (isa::WORD_BITS - 1));
             q <<= 1;
-
-            // Trial subtraction: A <- A - M
-            if (a >= m) {
-                a -= m;
-                q |= 1u; // Q0 <- 1
+            AdderOutput trial = Adders::add_or_subtract(c, to_bus(a), to_bus(divisor), constant(true), adder);
+            c.clock();
+            Word difference = Word(to_number(trial.sum));
+            if (trial.carry_out.value) {
+                a = difference;
+                q |= 1u;
             } else {
-                // Restore step: A < 0, keep A unchanged (implicit restore), Q0 <- 0
+                AdderOutput restored = Adders::add_or_subtract(c, to_bus(difference), to_bus(divisor), constant(false), adder);
+                c.clock();
+                a = Word(to_number(restored.sum));
             }
         }
-
-        return {q, static_cast<Word>(a)};
+        return {q, a};
     }
 
-    // 2. Non-Restoring Division (Smruti Sarangi Reference, Slide 64)
-    // Avoids restoring additions by conditionally adding or subtracting based on previous remainder sign
-    static DivisionResult non_restoring(Word dividend, Word divisor) {
+    // Shift [A, Q] left; subtract M if A is not negative, else add M; Q0 = 1 if A is now not
+    // negative. A is 33 bits wide (it goes down to -2M). One correction step at the end if A < 0.
+    static DivisionResult non_restoring(Circuit& c, Word dividend, Word divisor, AdderAlgorithm adder) {
+        const std::uint64_t mask = (std::uint64_t{1} << WIDE) - 1;
+        std::uint64_t a = 0;
         Word q = dividend;
-        std::int64_t a = 0;
-        const std::int64_t m = divisor;
-
-        for (unsigned step = 0; step < isa::WORD_BITS; ++step) {
-            const unsigned q_msb = (q >> (isa::WORD_BITS - 1)) & 1u;
-            if (a >= 0) {
-                a = (a << 1) | q_msb;
-                a -= m;
-            } else {
-                a = (a << 1) | q_msb;
-                a += m;
-            }
-
+        for (unsigned step = 0; step < isa::WORD_BITS; step++) {
+            bool a_negative = ((a >> isa::WORD_BITS) & 1u) != 0;
+            a = ((a << 1) | (q >> (isa::WORD_BITS - 1))) & mask;
             q <<= 1;
-            if (a >= 0) {
+            AdderOutput out = Adders::add_or_subtract(c, to_bus(a, WIDE), to_bus(divisor, WIDE), constant(!a_negative), adder);
+            c.clock();
+            a = to_number(out.sum);
+            if (((a >> isa::WORD_BITS) & 1u) == 0) {
                 q |= 1u;
             }
         }
-
-        // Final correction if remainder is negative
-        if (a < 0) {
-            a += m;
+        if (((a >> isa::WORD_BITS) & 1u) != 0) {
+            AdderOutput out = Adders::add_or_subtract(c, to_bus(a, WIDE), to_bus(divisor, WIDE), constant(false), adder);
+            c.clock();
+            a = to_number(out.sum);
         }
-
-        return {q, static_cast<Word>(a)};
+        return {q, Word(a)};
     }
 
 public:
-    static DivisionResult divide(Word dividend, Word divisor, DividerAlgorithm algorithm) {
+    static DivisionResult divide(Circuit& c, Word dividend, Word divisor, DividerAlgorithm algorithm, AdderAlgorithm adder) {
         if (divisor == 0) {
             throw CpuException{isa::Exception::DivideByZero, 0};
         }
-
-        // Signed two's complement boundary overflow: INT_MIN / -1
-        const SWord s_dividend = static_cast<SWord>(dividend);
-        const SWord s_divisor = static_cast<SWord>(divisor);
-        if (s_dividend == std::numeric_limits<SWord>::min() && s_divisor == -1) {
-            return {dividend, 0};
+        // The magnitude of INT_MIN is 2^31 as an unsigned number, so INT_MIN / -1 = INT_MIN, remainder 0
+        Word abs_dividend = dividend;
+        if (negative(dividend)) {
+            abs_dividend = negate(c, dividend, adder);
+        }
+        Word abs_divisor = divisor;
+        if (negative(divisor)) {
+            abs_divisor = negate(c, divisor, adder);
         }
 
-        const bool dividend_neg = (dividend >> (isa::WORD_BITS - 1)) != 0;
-        const bool divisor_neg = (divisor >> (isa::WORD_BITS - 1)) != 0;
-        const Word abs_dividend = magnitude(dividend);
-        const Word abs_divisor = magnitude(divisor);
-
-        DivisionResult result = (algorithm == DividerAlgorithm::Restoring)
-            ? restoring(abs_dividend, abs_divisor)
-            : non_restoring(abs_dividend, abs_divisor);
-
-        // Sign correction:
-        // Quotient sign is negative if operands have differing signs
-        if (dividend_neg ^ divisor_neg) {
-            result.quotient = Word{0} - result.quotient;
-        }
-        // Remainder sign always follows the dividend's sign
-        if (dividend_neg) {
-            result.remainder = Word{0} - result.remainder;
+        DivisionResult result;
+        if (algorithm == DividerAlgorithm::Restoring) {
+            result = restoring(c, abs_dividend, abs_divisor, adder);
+        } else {
+            result = non_restoring(c, abs_dividend, abs_divisor, adder);
         }
 
+        if (negative(dividend) != negative(divisor)) {
+            result.quotient = negate(c, result.quotient, adder);
+        }
+        if (negative(dividend)) {
+            result.remainder = negate(c, result.remainder, adder);
+        }
         return result;
     }
 
-    static constexpr DividerCharacteristics characteristics(DividerAlgorithm algorithm) {
-        switch (algorithm) {
-            case DividerAlgorithm::Restoring:
-                return {"Restoring Division (Slide 34 Flowchart)", 32, true};
-            case DividerAlgorithm::NonRestoring:
-            default:
-                return {"Non-Restoring Division (Sarangi Reference)", 32, false};
+    static DivisionResult divide(Word dividend, Word divisor, DividerAlgorithm algorithm) {
+        Circuit c;
+        return divide(c, dividend, divisor, algorithm, AluConfig{}.adder);
+    }
+
+    static const char* name(DividerAlgorithm algorithm) {
+        if (algorithm == DividerAlgorithm::Restoring) {
+            return "Restoring";
         }
+        return "Non-restoring";
     }
 };
-
-} // namespace risc::alu
+}
