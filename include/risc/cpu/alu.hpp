@@ -1,11 +1,11 @@
 #pragma once
 
 #include <cstdint>
-#include <limits>
 
-#include "risc/exception.hpp"
+#include "risc/alu/alu.hpp"
 #include "risc/cpu/flags.hpp"
 #include "risc/cpu/hardwired_control_unit.hpp"
+#include "risc/exception.hpp"
 #include "risc/isa/isa_config.hpp"
 
 namespace risc::cpu {
@@ -15,115 +15,92 @@ private:
     using Word = isa::Word;
     using SWord = isa::SWord;
 
-    // Adder: add, sub, cmp and the address for ld/st
-    static Word adder(Word a, Word b, const ControlSignals& ctrl, Flags& flags) {
-        Word result;
-        bool carry;
-        bool overflow;
-
-        if (ctrl.isSub || ctrl.isCmp) {
-            result = a - b;
-            carry = a >= b;
-            std::int64_t exact = std::int64_t(SWord(a)) - std::int64_t(SWord(b));
-            overflow = exact != std::int64_t(SWord(result));
-        } else {
-            result = a + b;
-            carry = (std::uint64_t(a) + std::uint64_t(b)) >> isa::WORD_BITS != 0;
-            std::int64_t exact = std::int64_t(SWord(a)) + std::int64_t(SWord(b));
-            overflow = exact != std::int64_t(SWord(result));
-        }
-
-        if (ctrl.isCmp) {
-            flags.set(isa::FLAG_E, a == b);
-            flags.set(isa::FLAG_GT, SWord(a) > SWord(b));
-        }
-
-        // add, sub and cmp write C and V, but ld/st only borrow the adder for the address
-        bool writes_c_v = ctrl.isSub || ctrl.isCmp || (ctrl.isAdd && !ctrl.isLd && !ctrl.isSt);
-        if (writes_c_v) {
-            flags.set(isa::FLAG_C, carry);
-            flags.set(isa::FLAG_V, overflow);
-        }
-        return result;
-    }
-
-    // Multiplier: low 32 bits of the product
-    static Word multiplier(Word a, Word b) {
-        return a * b;
-    }
-
-    // Divider: signed, rounds toward zero, remainder takes the sign of a
-    static Word divider(Word a, Word b, const ControlSignals& ctrl) {
-        if (b == 0) {
-            throw CpuException{isa::Exception::DivideByZero, 0};
-        }
-
-        SWord x = SWord(a);
-        SWord y = SWord(b);
-
-        // INT_MIN / -1 gives INT_MIN, remainder 0 which leads to overflow
-        if (x == std::numeric_limits<SWord>::min() && y == -1) {
-            if (ctrl.isDiv) {
-                return a;
-            }
-            return 0;
-        }
-
-        if (ctrl.isDiv) {
-            return Word(x / y);
-        }
-        return Word(x % y);
-    }
-
-    // Shift unit: only the low 5 bits of b are used as the shift amount
-    static Word shift_unit(Word a, Word b, const ControlSignals& ctrl) {
-        unsigned amount = b & (isa::WORD_BITS - 1);
-
-        if (ctrl.isLsl) {
-            return a << amount;
-        }
-        if (ctrl.isLsr) {
-            return a >> amount;
-        }
-        return Word(SWord(a) >> amount); // asr
-    }
-
-    // Logical unit: and, or, xor, not
-    static Word logical_unit(Word a, Word b, const ControlSignals& ctrl) {
-        if (ctrl.isAnd) {
-            return a & b;
-        }
-        if (ctrl.isOr) {
-            return a | b;
-        }
-        if (ctrl.isXor) {
-            return a ^ b;
-        }
-        return ~b;
-    }
+    alu::OptimizedALU core_alu;
 
 public:
+    explicit ALU(alu::AdderAlgorithm adder = alu::AdderAlgorithm::CarryLookahead,
+                 alu::MultiplierAlgorithm multiplier = alu::MultiplierAlgorithm::BoothRadix2,
+                 alu::DividerAlgorithm divider = alu::DividerAlgorithm::Restoring)
+        : core_alu(adder, multiplier, divider) {}
+
+    void select_adder(alu::AdderAlgorithm algo) { core_alu.select_adder(algo); }
+    void select_multiplier(alu::MultiplierAlgorithm algo) { core_alu.select_multiplier(algo); }
+    void select_divider(alu::DividerAlgorithm algo) { core_alu.select_divider(algo); }
+
+    const alu::OptimizedALU& core() const { return core_alu; }
+    alu::OptimizedALU& core() { return core_alu; }
+
     // Final multiplexer
     Word execute(Word a, Word b, const ControlSignals& ctrl, Flags& flags) const {
         if (ctrl.isAdd || ctrl.isSub || ctrl.isCmp) {
-            return adder(a, b, ctrl, flags);
+            alu::ALUFlags alu_flags;
+            Word result = 0;
+            if (ctrl.isSub || ctrl.isCmp) {
+                result = core_alu.sub(a, b, alu_flags);
+            } else {
+                result = core_alu.add(a, b, alu_flags);
+            }
+
+            if (ctrl.isCmp) {
+                flags.set(isa::FLAG_E, alu_flags.E);
+                flags.set(isa::FLAG_GT, alu_flags.GT);
+            }
+
+            // add, sub and cmp write C and V, but ld/st only borrow the adder for the address
+            bool writes_c_v = ctrl.isSub || ctrl.isCmp || (ctrl.isAdd && !ctrl.isLd && !ctrl.isSt);
+            if (writes_c_v) {
+                flags.set(isa::FLAG_C, alu_flags.C);
+                flags.set(isa::FLAG_V, alu_flags.V);
+            }
+            return result;
         }
+
         if (ctrl.isMul) {
-            return multiplier(a, b);
+            return core_alu.mul(a, b);
         }
-        if (ctrl.isDiv || ctrl.isMod) {
-            return divider(a, b, ctrl);
+
+        if (ctrl.isDiv) {
+            return core_alu.div(a, b);
         }
-        if (ctrl.isLsl || ctrl.isLsr || ctrl.isAsr) {
-            return shift_unit(a, b, ctrl);
+
+        if (ctrl.isMod) {
+            return core_alu.mod(a, b);
         }
-        if (ctrl.isAnd || ctrl.isOr || ctrl.isXor || ctrl.isNot) {
-            return logical_unit(a, b, ctrl);
+
+        if (ctrl.isLsl) {
+            return core_alu.shift(a, b, alu::ShiftOp::Lsl);
         }
+
+        if (ctrl.isLsr) {
+            return core_alu.shift(a, b, alu::ShiftOp::Lsr);
+        }
+
+        if (ctrl.isAsr) {
+            return core_alu.shift(a, b, alu::ShiftOp::Asr);
+        }
+
+        if (ctrl.isAnd) {
+            return alu::OptimizedALU::bitwise_and(a, b);
+        }
+
+        if (ctrl.isOr) {
+            return alu::OptimizedALU::bitwise_or(a, b);
+        }
+
+        if (ctrl.isXor) {
+            return alu::OptimizedALU::bitwise_xor(a, b);
+        }
+
+        if (ctrl.isNot) {
+            return alu::OptimizedALU::bitwise_not(b);
+        }
+
         if (ctrl.isMov) {
             return b;
         }
+
         return 0; // no ALU operation (branches, nop, hlt)
     }
 };
-}
+
+} // namespace risc::cpu
